@@ -1,21 +1,27 @@
-# minase の lishogi Bot を動かす compose 定義。
-# 先に ./build-image.sh <minaseのコミット> でイメージを作り、
-# 環境変数 LISHOGI_BOT_TOKEN(bot:play スコープ)を置いてから
-# `docker compose up -d` で起動する(手順は README.md)。
+# minase の lishogi Bot を動かす compose 定義(手順は README.md)。
+# .env に MINASE_REF(minase のコミットハッシュ)と LISHOGI_BOT_TOKEN を置き、
+# `docker compose up --build -d` で minase を取得・ビルドして起動する。
 # 設定ファイルは同じディレクトリの config.yml をマウントするので、
-# 変更は `docker compose restart` で反映され、イメージの再ビルドは要らない。
+# 変更は `docker compose up -d --no-build` で反映され、再ビルドは要らない。
 services:
   bot:
-    image: minase-lishogi-bot:latest
+    build:
+      context: .
+      additional_contexts:
+        minase-source: https://github.com/stepney141/minase.git#${MINASE_REF:?Set MINASE_REF in .env to a minase commit hash}
+      args:
+        MINASE_REF: ${MINASE_REF:?Set MINASE_REF in .env to a minase commit hash}
+    platform: linux/amd64
+    init: true
+    restart: unless-stopped
     environment:
-      LISHOGI_BOT_TOKEN: ${LISHOGI_BOT_TOKEN:?set LISHOGI_BOT_TOKEN to the bot:play token}
+      LISHOGI_BOT_TOKEN: ${LISHOGI_BOT_TOKEN:?Set LISHOGI_BOT_TOKEN in .env to the bot:play token}
+    mem_limit: ${MINASE_LISHOGI_BOT_MEMORY_LIMIT:?Set MINASE_LISHOGI_BOT_MEMORY_LIMIT in .env}
+    memswap_limit: ${MINASE_LISHOGI_BOT_MEMORY_LIMIT:?Set MINASE_LISHOGI_BOT_MEMORY_LIMIT in .env}
+    # config.yml の Threads と同じ値にする。
+    cpus: ${MINASE_LISHOGI_BOT_CPU_LIMIT:?Set MINASE_LISHOGI_BOT_CPU_LIMIT in .env}
     volumes:
       - ./config.yml:/opt/lishogi-bot/config.yml:ro
       - lishogi-bot-logs:/var/log/lishogi-bot
-    restart: unless-stopped
-    # config.yml の Threads と同じ CPU 数を上限にする。
-    cpus: 4
-    mem_limit: 2g
-    init: true
 volumes:
   lishogi-bot-logs:
