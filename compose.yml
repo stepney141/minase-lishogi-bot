@@ -1,6 +1,6 @@
 # minase の lishogi Bot を動かす compose 定義(手順は README.md)。
-# .env に MINASE_REF(minase のコミットハッシュ)と LISHOGI_BOT_TOKEN を置き、
-# `docker compose up --build -d` で minase を取得・ビルドして起動する。
+# .env に LISHOGI_BOT_TOKEN と資源上限を置き、`docker compose up --build -d` で
+# minase のデフォルトブランチの最新コミットを取得・ビルドして起動する(minase-gui と同じ方式)。
 # 設定ファイルは同じディレクトリの config.yml をマウントするので、
 # 変更は `docker compose up -d --no-build` で反映され、再ビルドは要らない。
 services:
@@ -8,9 +8,7 @@ services:
     build:
       context: .
       additional_contexts:
-        minase-source: https://github.com/stepney141/minase.git#${MINASE_REF:?Set MINASE_REF in .env to a minase commit hash}
-      args:
-        MINASE_REF: ${MINASE_REF:?Set MINASE_REF in .env to a minase commit hash}
+        minase-source: https://github.com/stepney141/minase.git
     platform: linux/amd64
     init: true
     restart: unless-stopped

@@ -12,8 +12,6 @@ RUN cargo build --locked --release --bin minase
 FROM python:3.11-slim-bookworm AS runtime
 # TheYoBots/Lishogi-Bot の固定コミット(2024年10月26日)。
 ARG LISHOGI_BOT_COMMIT=17c16bc73b22fa6d56e0a412174c7c44993e619d
-# 公開運用に使う minase のコミット。compose.yml が .env の MINASE_REF から渡す。
-ARG MINASE_REF
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/* \
@@ -29,8 +27,6 @@ COPY minase-lishogi /opt/minase/minase-lishogi
 # /opt/lishogi-bot/config.yml へ読み取り専用でマウントする。
 WORKDIR /opt/lishogi-bot
 USER app
-ENV MINASE_REF=${MINASE_REF}
-LABEL org.opencontainers.image.revision=${MINASE_REF}
 # 認証トークンは実行時に環境変数 LISHOGI_BOT_TOKEN で渡す。
 ENTRYPOINT ["python3", "lishogi-bot.py"]
 CMD ["-v", "--logfile", "/var/log/lishogi-bot/lishogi-bot.log"]

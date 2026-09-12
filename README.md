@@ -11,8 +11,8 @@ lishogiのBot APIとUSIの仲介は、Python製ブリッジ[TheYoBots/Lishogi-Bo
 | ファイル | 役割 |
 |---|---|
 | `Dockerfile` | 2段階ビルド。第1段階はrust:1.98でminaseをビルドし、第2段階はpython:3.11-slimへLishogi-Botを固定コミットで取得して依存パッケージを入れ、minaseのバイナリと起動ラッパーを置く。コンテナは非rootユーザー（uid 10001）で動く。 |
-| `compose.yml` | ビルドと起動の定義。minaseのソースは`additional_contexts`でGitHubの`minase.git#<コミット>`を名前付き文脈として渡し、Dockerfileが`COPY --from=minase-source`で取り込む（minase-guiと同じ方式）。イメージにはラベル`org.opencontainers.image.revision`と環境変数`MINASE_REF`が付く。ログは名前付きボリュームに残る。 |
-| `.env.example` | `.env`の雛形。minaseのコミット、認証トークン、コンテナの資源上限を置く。 |
+| `compose.yml` | ビルドと起動の定義。minaseのソースは`additional_contexts`でGitHubの`minase.git`を名前付き文脈として渡し、Dockerfileが`COPY --from=minase-source`で取り込む（minase-guiと同じ方式）。ビルド時にデフォルトブランチの最新コミットを取得する。ログは名前付きボリュームに残る。 |
+| `.env.example` | `.env`の雛形。認証トークンとコンテナの資源上限を置く。 |
 | `minase-lishogi` | `--protocol usi --rules lishogi`を固定してminaseを起動するシェルスクリプト。 |
 | `config.yml` | Lishogi-Botの設定。コンテナへ読み取り専用でマウントする。 |
 
@@ -22,12 +22,11 @@ lishogiのBot APIとUSIの仲介は、Python製ブリッジ[TheYoBots/Lishogi-Bo
 ## 前提
 
 - Docker（Compose v2を含む）。ビルド時にGitHubからminaseとLishogi-Botを取得するので、ビルド機はネットワークに出られる必要がある。
-- 公開運用に使うminaseのコミットがGitHubへpush済みであること。
 - `bot:play`スコープの認証トークン。対局履歴のない新規アカウントで発行する。昇格は取り消せず、一度でも対局したアカウントは昇格できない。
 
 ## 手順
 
-1. `.env.example`を`.env`へ複製し、公開に使うminaseのコミットハッシュを`MINASE_REF`に、トークンを`LISHOGI_BOT_TOKEN`に書く。`.env`はGit管理の対象外である。ブランチ名も受理されるが、運用中のコミットを確定できないので使わない。
+1. `.env.example`を`.env`へ複製し、トークンを`LISHOGI_BOT_TOKEN`に書く。`.env`はGit管理の対象外である。
 
 2. 初回だけ、Botを起動せずにアカウントを昇格する。Lishogi-Botの`-u`は昇格後にそのまま挑戦の待受へ進むので使わず、同じAPIを直接呼ぶ。応答が`{"ok":true}`であることを確かめる。
 
@@ -35,7 +34,7 @@ lishogiのBot APIとUSIの仲介は、Python製ブリッジ[TheYoBots/Lishogi-Bo
    curl -X POST https://lishogi.org/api/bot/account/upgrade -H "Authorization: Bearer $LISHOGI_BOT_TOKEN"
    ```
 
-3. minaseを取得・ビルドして起動し、挑戦の待受に入ったことと認証エラーがないことをログで確かめる。同じアカウントのBotを2つ起動しない。
+3. minaseのデフォルトブランチの最新コミットを取得・ビルドして起動し、挑戦の待受に入ったことと認証エラーがないことをログで確かめる。同じアカウントのBotを2つ起動しない。ビルド時点のコミットは`git ls-remote https://github.com/stepney141/minase.git HEAD`で確かめて記録する。
 
    ```console
    docker compose up --build -d
@@ -44,8 +43,8 @@ lishogiのBot APIとUSIの仲介は、Python製ブリッジ[TheYoBots/Lishogi-Bo
 
 4. 運用の開始と終了、使用コミット、および受け付けた対局条件を記録する。Botのプロフィールにはエンジン名、リポジトリの所在、および運用中のコミットを記す。
 
-運用中のコミットを差し替えるときは、`.env`の`MINASE_REF`を書き換えて`docker compose up --build -d`を再実行する。コンテナの再起動だけではminaseを取得し直さない。
-差し替えはminaseの棋力向上の段階が完了するたびに行い、段階の途中のコミットは使わない。
+エンジンを更新するときは、`docker compose up --build -d`を再実行する。コンテナの再起動だけではminaseを取得し直さない。取得またはビルドに失敗した場合は更新を失敗として扱う。
+更新はminaseのデフォルトブランチが進んだときに行う。
 設定ファイルの変更（`Threads`、`USI_Hash`、受け付ける時間制御、`modes`への`rated`の追加）は、イメージの再ビルドを要せず、`docker compose up -d --no-build`で反映する。
 `.env`のCPU数とメモリ上限は`config.yml`の`Threads`と`USI_Hash`に合わせて変え、両者を一致させる。
 コンテナは非rootユーザーで動くため、`config.yml`は他ユーザーも読める644にする。
