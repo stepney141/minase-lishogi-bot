@@ -29,7 +29,7 @@ challenge:
   only_bot: false
   max_increment: 60
   min_increment: 0
-  max_byoyomi: 60
+  max_byoyomi: 180
   min_byoyomi: 0
   max_base: 7200
   min_base: 180
