@@ -13,7 +13,7 @@ engine:
   ponder: false
   usi_options:
     Threads: 4
-    USI_Hash: 1024
+    USI_Hash: 2048
   silence_stderr: false
   startup_lines: 0
 
