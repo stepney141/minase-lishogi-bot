@@ -31,7 +31,7 @@ challenge:
   min_increment: 0
   max_byoyomi: 180
   min_byoyomi: 0
-  max_base: 7200
+  max_base: 10800
   min_base: 180
   variants:
     - chushogi
