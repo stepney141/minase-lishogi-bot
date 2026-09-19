@@ -41,6 +41,7 @@ challenge:
     - classical
   modes:
     - casual
+    - rated
 
 greeting:
   hello: "Hi! I'm {me}, running minase, a chu shogi engine under development (https://github.com/stepney141/minase). Good luck!"
