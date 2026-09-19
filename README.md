@@ -2,8 +2,9 @@
 
 中将棋エンジン[minase](https://github.com/stepney141/minase)を、オンライン対局サイトlishogiのBotアカウントとして動かすための配備一式である。
 minase本体はUSIエンジンとして呼ばれる側であり、lishogiの知識を持たない。
-lishogiのBot APIとUSIの仲介は、Python製ブリッジ[nhamil/lishogi-bot](https://github.com/nhamil/lishogi-bot)を固定した版（コミットdb18bd2、2026年3月14日）でそのまま使い、改変しない。
-これは[TheYoBots/Lishogi-Bot](https://github.com/TheYoBots/Lishogi-Bot)のコミット17c16bc（2024年10月26日）のフォークであり、lishogi側のAPI変更への追従（後述）を含む。
+lishogiのBot APIとUSIの仲介は、Python製ブリッジ[stepney141/lishogi-bot](https://github.com/stepney141/lishogi-bot)を固定した版（コミット1cbfcb9、2026年9月19日）で使う。
+これは[nhamil/lishogi-bot](https://github.com/nhamil/lishogi-bot)のコミットdb18bd2（2026年3月14日）にponderの修正を1コミット加えたフォークである。
+nhamil版は[TheYoBots/Lishogi-Bot](https://github.com/TheYoBots/Lishogi-Bot)のコミット17c16bc（2024年10月26日）のフォークであり、lishogi側のAPI変更への追従（後述）を含む。
 
 ## 構成
 
@@ -20,7 +21,7 @@ lishogiのBot APIとUSIの仲介は、Python製ブリッジ[nhamil/lishogi-bot](
 `minase-lishogi`が必要なのは、Lishogi-Botの`engine_options`が使えないためである。
 `engine_options`を与えるとLishogi-Botは起動コマンドを引数つきのリストのまま`shell=True`で`Popen`に渡すので、引数はシェルの位置引数になってエンジンへ届かず、`--protocol`を欠いたminaseは直ちに終了する（`engine_wrapper.py`の`create_engine`、`engine_ctrl/usi.py`の`open_process`）。
 
-TheYoBots版ではなくnhamil版を使うのは、lishogiが2025年11月7日のコミットee46131で挑戦JSONから`speed`を削ったためである。
+TheYoBots版ではなくnhamil版を土台にするのは、lishogiが2025年11月7日のコミットee46131で挑戦JSONから`speed`を削ったためである。
 TheYoBots版の17c16bcは`model.py`の`Challenge.__init__`で`speed`を必須として読むので、挑戦を受け取った瞬間に`KeyError`で主ループが落ちる。
 落ちた後も子プロセスがイベントストリームへ再接続し続けるためコンテナは動いたままになり、lishogi上ではBotがオンラインに見えるのに挑戦に応答しない。
 nhamil版のコミットe0a3169は、`speed`が無いときに削られる前のlishogiと同じ規則で`timeControl`から求める。
@@ -28,6 +29,12 @@ nhamil版のコミットe0a3169は、`speed`が無いときに削られる前の
 この規則により、`config.yml`の`time_controls`は従来どおりblitz、rapid、classicalの名前で指定できる。
 nhamil版は17c16bcに対してこのほか、秒読みが0でないときの下限`min_nonzero_byoyomi`、挑戦者の許可リストと拒否リスト（`allow_list`、`block_list`、`bot_allow_list`、`bot_block_list`）、および京都将棋の指し手をリストで受ける修正を加えている。
 いずれも設定を省略すれば無効であり、`config.yml`では使っていない。
+
+stepney141版がnhamil版に加えるのは、ponderの修正（コミット1cbfcb9）だけである。
+nhamil版はStandard以外の変則で、先読みの`go ponder`に自分の着手と予想手を含まない局面を渡す。
+StandardとCheckshogi以外では予想手との照合もnull手との比較になり、`ponderhit`が成立しない。
+修正後は、自分の着手と予想手を加えた手順を渡し、エンジンへ送る記法の最終手と予想手を照合する。
+`config.yml`は`ponder`を無効にしているので、この修正は現在の運用の挙動を変えない。
 
 ## 前提
 
