@@ -63,7 +63,7 @@ StandardとCheckshogi以外では予想手との照合もnull手との比較に�
 エンジンを更新するときは、`docker compose up --build -d`を再実行する。コンテナの再起動だけではminaseを取得し直さない。取得またはビルドに失敗した場合は更新を失敗として扱う。
 更新はminaseのデフォルトブランチが進んだときに行う。
 設定ファイルの変更（`Threads`、`USI_Hash`、受け付ける時間制御、`modes`への`rated`の追加）は、イメージの再ビルドを要せず、`docker compose up -d --no-build`で反映する。
-`.env`のCPU数とメモリ上限は`config.yml`の`Threads`と`USI_Hash`に合わせて変え、両者を一致させる。
+`.env`のCPU数は`config.yml`の`Threads`に同時対局数を掛けた値にし、メモリ上限は`USI_Hash`に同時対局数を掛けた値より大きくする。
 コンテナは非rootユーザーで動くため、`config.yml`は他ユーザーも読める644にする。
 
 ## 設定ファイル
@@ -76,7 +76,7 @@ Lishogi-Botは`token`の項目自体を必須とするので、設定ファイ�
 - `ponder`は無効にする。minaseはponderを実装していない。
 - `go_commands`は与えない。深さやノード数の上書きは時間管理を無効にする。
 - `move_overhead`は1,900ミリ秒を明示する。雛形の値と、項目を省略したときのコード上の既定値（1,000ミリ秒）が異なるためである。
-- 同時対局数は1にする。複数対局は探索スレッドと置換表を奪い合い、時間切れの原因になる。
+- 同時対局数（`challenge.concurrency`）は2にする。Lishogi-Botは対局ごとにエンジンのプロセスを1つ起動するので、`Threads`と`USI_Hash`は1局あたりの値である。コンテナのCPU数とメモリ上限を2局分にしておけば、対局どうしが探索スレッドと置換表を奪い合うことはない。
 - 超早指し（ultraBullet、bullet）と通信対局は受け付けない。
 - 公開は非レート対局（`modes: [casual]`）から始め、異常0件を確認してから`rated`を加える。
 

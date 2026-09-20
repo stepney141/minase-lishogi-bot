@@ -23,7 +23,7 @@ rate_limiting_delay: 0
 move_overhead: 1900
 
 challenge:
-  concurrency: 1
+  concurrency: 2
   sort_by: "best"
   accept_bot: true
   only_bot: false
