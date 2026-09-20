@@ -10,11 +10,11 @@ ENV RUSTFLAGS="-C target-cpu=x86-64"
 RUN cargo build --locked --release --bin minase
 
 FROM python:3.11-slim-bookworm AS runtime
-# stepney141/lishogi-bot の固定コミット(2026年9月19日)。nhamil/lishogi-bot db18bd2 に
-# ponder の修正を 1 コミット加えたフォークである。nhamil 版は TheYoBots/Lishogi-Bot 17c16bc の
+# stepney141/lishogi-bot の固定コミット(2026年9月21日)。nhamil/lishogi-bot db18bd2 に
+# ponder の修正を 2 コミット加えたフォークである。nhamil 版は TheYoBots/Lishogi-Bot 17c16bc の
 # フォークで、lishogi が挑戦 JSON から speed を削った(2025年11月7日 ee46131)ことに
 # 追従している(README.md「構成」)。
-ARG LISHOGI_BOT_COMMIT=1cbfcb9848dd1ec52ae9ecb1ebe9bafe05ec77ec
+ARG LISHOGI_BOT_COMMIT=201af8a4522bb0c5b4a390686e6223f45fd1a2cc
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/* \

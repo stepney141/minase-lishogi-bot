@@ -10,7 +10,7 @@ engine:
   # engine_options は Lishogi-Bot が引数を捨てるため使わない。
   name: "minase-lishogi"
   protocol: "usi"
-  ponder: false
+  ponder: true
   usi_options:
     Threads: 4
     USI_Hash: 2048

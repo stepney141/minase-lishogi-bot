@@ -2,8 +2,8 @@
 
 中将棋エンジン[minase](https://github.com/stepney141/minase)を、オンライン対局サイトlishogiのBotアカウントとして動かすための配備一式である。
 minase本体はUSIエンジンとして呼ばれる側であり、lishogiの知識を持たない。
-lishogiのBot APIとUSIの仲介は、Python製ブリッジ[stepney141/lishogi-bot](https://github.com/stepney141/lishogi-bot)を固定した版（コミット1cbfcb9、2026年9月19日）で使う。
-これは[nhamil/lishogi-bot](https://github.com/nhamil/lishogi-bot)のコミットdb18bd2（2026年3月14日）にponderの修正を1コミット加えたフォークである。
+lishogiのBot APIとUSIの仲介は、Python製ブリッジ[stepney141/lishogi-bot](https://github.com/stepney141/lishogi-bot)を固定した版（コミット201af8a、2026年9月21日）で使う。
+これは[nhamil/lishogi-bot](https://github.com/nhamil/lishogi-bot)のコミットdb18bd2（2026年3月14日）にponderの修正を2コミット加えたフォークである。
 nhamil版は[TheYoBots/Lishogi-Bot](https://github.com/TheYoBots/Lishogi-Bot)のコミット17c16bc（2024年10月26日）のフォークであり、lishogi側のAPI変更への追従（後述）を含む。
 
 ## 構成
@@ -17,6 +17,7 @@ nhamil版は[TheYoBots/Lishogi-Bot](https://github.com/TheYoBots/Lishogi-Bot)の
 | `.env.example` | `.env`の雛形。認証トークンとコンテナの資源上限を置く。 |
 | `minase-lishogi` | `--protocol usi --rules lishogi`を固定してminaseを起動するシェルスクリプト。 |
 | `config.yml` | Lishogi-Botの設定。コンテナへ読み取り専用でマウントする。 |
+| `ponder_check.py` | lishogiへ接続せずに、イメージの中でLishogi-Botの関数を呼んで先読み（ponder）の通信を確かめるスクリプト（後述）。 |
 
 `minase-lishogi`が必要なのは、Lishogi-Botの`engine_options`が使えないためである。
 `engine_options`を与えるとLishogi-Botは起動コマンドを引数つきのリストのまま`shell=True`で`Popen`に渡すので、引数はシェルの位置引数になってエンジンへ届かず、`--protocol`を欠いたminaseは直ちに終了する（`engine_wrapper.py`の`create_engine`、`engine_ctrl/usi.py`の`open_process`）。
@@ -30,11 +31,14 @@ nhamil版のコミットe0a3169は、`speed`が無いときに削られる前の
 nhamil版は17c16bcに対してこのほか、秒読みが0でないときの下限`min_nonzero_byoyomi`、挑戦者の許可リストと拒否リスト（`allow_list`、`block_list`、`bot_allow_list`、`bot_block_list`）、および京都将棋の指し手をリストで受ける修正を加えている。
 いずれも設定を省略すれば無効であり、`config.yml`では使っていない。
 
-stepney141版がnhamil版に加えるのは、ponderの修正（コミット1cbfcb9）だけである。
+stepney141版がnhamil版に加えるのは、ponderの2つの修正（コミット1cbfcb9と201af8a）だけである。
 nhamil版はStandard以外の変則で、先読みの`go ponder`に自分の着手と予想手を含まない局面を渡す。
 StandardとCheckshogi以外では予想手との照合もnull手との比較になり、`ponderhit`が成立しない。
 修正後は、自分の着手と予想手を加えた手順を渡し、エンジンへ送る記法の最終手と予想手を照合する。
-`config.yml`は`ponder`を無効にしているので、この修正は現在の運用の挙動を変えない。
+コミット201af8aは、先読みの開始時に残り時間へ秒読みを足さないようにする。
+lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を秒読みの長さへ戻すので、サーバが知らせる残り時間には秒読みが含まれている。
+修正前は、足した秒読みを`go`の送信部が引き直して打ち消し合い、秒読みの消化中の`go ponder`が、実際には残っていない持ち時間を`btime`または`wtime`として送っていた。
+修正後は通常の`go`と同じ規約になり、秒読みの消化中は残り時間0と秒読みを送る。
 
 ## 前提
 
@@ -73,7 +77,7 @@ Lishogi-Botは`token`の項目自体を必須とするので、設定ファイ�
 `Threads`、`USI_Hash`、受け付ける時間制御の範囲は運用パラメータであり、運用機に合わせて変える。
 
 - `engine.name`はラッパー`minase-lishogi`を指す。`engine_options`は使わない。
-- `ponder`は無効にする。minaseはponderを実装していない。
+- `ponder`は有効にする。minaseは`bestmove`に予想手を付け、`go ponder`と`ponderhit`に対応する（minaseの`docs/plans/ponder.md`）。先読みの間も`Threads`の数だけCPUを使うので、コンテナのCPU数は「`Threads`×同時対局数」を下回らないようにする。
 - `go_commands`は与えない。深さやノード数の上書きは時間管理を無効にする。
 - `move_overhead`は1,900ミリ秒を明示する。雛形の値と、項目を省略したときのコード上の既定値（1,000ミリ秒）が異なるためである。
 - 同時対局数（`challenge.concurrency`）は2にする。Lishogi-Botは対局ごとにエンジンのプロセスを1つ起動するので、`Threads`と`USI_Hash`は1局あたりの値である。コンテナのCPU数とメモリ上限を2局分にしておけば、対局どうしが探索スレッドと置換表を奪い合うことはない。
@@ -91,6 +95,21 @@ Lishogi-Botは、自分の手番で`go`を送る前に、残り時間から`move
 minaseの予算式は秒読みの8割を上限にするので、サーバへの送信遅延に使える余裕は秒読みの2割だけである。
 秒読みの短い対局ほど余裕が小さいため、公開運用ではLishogi-Botのログから`go`の引数、`bestmove`の時刻、および着手送信の時刻を取り出し、lishogi側の時計と突き合わせて端到端の最小の余裕を記録する。
 余裕が不足する場合は`move_overhead`を増やして対処せず、minase側の時間管理を直す。
+
+## 先読みの通信の確認
+
+`ponder_check.py`は、lishogiへ接続せずに、配備と同じイメージの中でLishogi-Botの関数（`play_midgame_move`、`start_pondering`、`get_pondering_result`、および終局時の停止）を対局ループと同じ順に呼び、エンジンとの送受信を確かめる。
+確かめる内容は、`go ponder`の局面が自分の着手と予想手を含むこと、`ponderhit`または`stop`より前に`bestmove`が届かないこと、的中で`ponderhit`だけが送られること、外れで`stop`の後に`bestmove`が1回だけ届いて通常の`go`へ進めること、秒読みの消化中の`go ponder`が残り時間0と秒読みを送り、的中後の思考が秒読みに収まること、および先読み中の終局で`position`、`stop`、`quit`の後にエンジンが終了することである。
+Lishogi-Botの固定コミット、minase、または`config.yml`の`ponder`を変えたときに、イメージをビルドしてから次のコマンドで実行し、最後に`ALL CHECKS PASSED`が出ることを確かめる。
+スクリプトの実行には認証トークンを使わず、運用中のコンテナにも触れない。
+
+```console
+docker compose build
+docker run --rm --cpus 8 \
+  -v ./config.yml:/opt/lishogi-bot/config.yml:ro \
+  -v ./ponder_check.py:/opt/lishogi-bot/ponder_check.py:ro \
+  --entrypoint python3 minase-lishogi-bot-bot ponder_check.py
+```
 
 ## 事後照合
 
