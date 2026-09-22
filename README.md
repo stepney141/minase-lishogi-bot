@@ -35,7 +35,7 @@ nhamil版のコミットe0a3169は、`speed`が無いときに削られる前の
 nhamil版は17c16bcに対してこのほか、秒読みが0でないときの下限`min_nonzero_byoyomi`、挑戦者の許可リストと拒否リスト（`allow_list`、`block_list`、`bot_allow_list`、`bot_block_list`）、および京都将棋の指し手をリストで受ける修正を加えている。
 いずれも設定を省略すれば無効であり、`config.yml`では使っていない。
 
-stepney141版は、ponderの2つの修正（コミット1cbfcb9と201af8a）と、後述する通信対局への対応を加えている。
+stepney141版は、ponderの2つの修正（コミット1cbfcb9と201af8a）、後述する通信対局への対応、および投了の対応（コミット7568380）を加えている。
 nhamil版はStandard以外の変則で、先読みの`go ponder`に自分の着手と予想手を含まない局面を渡す。
 StandardとCheckshogi以外では予想手との照合もnull手との比較になり、`ponderhit`が成立しない。
 修正後は、自分の着手と予想手を加えた手順を渡し、エンジンへ送る記法の最終手と予想手を照合する。
@@ -43,6 +43,9 @@ StandardとCheckshogi以外では予想手との照合もnull手との比較に�
 lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を秒読みの長さへ戻すので、サーバが知らせる残り時間には秒読みが含まれている。
 修正前は、足した秒読みを`go`の送信部が引き直して打ち消し合い、秒読みの消化中の`go ponder`が、実際には残っていない持ち時間を`btime`または`wtime`として送っていた。
 修正後は通常の`go`と同じ規約になり、秒読みの消化中は残り時間0と秒読みを送る。
+コミット7568380は、エンジンが`bestmove resign`を返したときに、それを着手として送る代わりに対局APIの投了を呼び、先読みを始めない。
+上流は`bestmove`の2語目をそのまま着手として送るので、修正前はminaseの投了が着手の送信失敗になった。
+外れた先読みの結果は従来どおり捨てるので、その経路の`bestmove resign`は投了にならない（`test_resign.py`）。
 
 ## 前提
 
@@ -83,6 +86,7 @@ Lishogi-Botは`token`の項目自体を必須とするので、設定ファイ�
 `Threads`、`USI_Hash`、受け付ける時間制御の範囲は運用パラメータであり、運用機に合わせて変える。
 
 - `engine.name`はラッパー`minase-lishogi`を指す。`engine_options`は使わない。
+- minaseは詰まされる読みが出た局面で`bestmove resign`を返す（USIオプション`ResignValue`、既定20000、minaseの`docs/plans/usi-resignation.md`）。`config.yml`では値を上書きせず既定値のまま使う。
 - 通常対局では`engine.ponder`を有効にし、通信対局では`correspondence.ponder`を無効にする。minaseは`bestmove`に予想手を付け、`go ponder`と`ponderhit`に対応する（minaseの`docs/plans/ponder.md`）。先読みの間も`Threads`の数だけCPUを使うので、コンテナのCPU数は「`Threads`×同時対局数」を下回らないようにする。
 - `go_commands`は与えない。深さやノード数の上書きは時間管理を無効にする。
 - `move_overhead`は1,900ミリ秒を明示する。雛形の値と、項目を省略したときのコード上の既定値（1,000ミリ秒）が異なるためである。
@@ -143,7 +147,7 @@ docker run --rm --network none \
   -v ./test_correspondence.py:/opt/lishogi-bot/test_correspondence.py:ro \
   -v ./test_streams.py:/opt/lishogi-bot/test_streams.py:ro \
   --entrypoint python3 minase-lishogi-bot-bot \
-  -m pytest -q -W error -p no:cacheprovider test_streams.py test_correspondence.py test_ponder.py
+  -m pytest -q -W error -p no:cacheprovider test_streams.py test_correspondence.py test_ponder.py test_resign.py
 ```
 
 ## 通常対局の時計の換算と注意
