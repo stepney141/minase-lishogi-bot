@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
 # minase を lishogi の Bot アカウントとして動かすイメージ。
-# minase のソースは compose.yml の additional_contexts が名前付き文脈
-# minase-source として渡す(minase-gui と同じ方式)。
+# minase と Lishogi-Bot のソースは compose.yml の additional_contexts から渡す。
 
 FROM rust:1.98-bookworm AS minase-build
 WORKDIR /build/minase
@@ -10,20 +9,13 @@ ENV RUSTFLAGS="-C target-cpu=x86-64"
 RUN cargo build --locked --release --bin minase
 
 FROM python:3.11-slim-bookworm AS runtime
-# stepney141/lishogi-bot の固定コミット(2026年9月21日)。nhamil/lishogi-bot db18bd2 に
-# ponder の修正を 2 コミット加えたフォークである。nhamil 版は TheYoBots/Lishogi-Bot 17c16bc の
-# フォークで、lishogi が挑戦 JSON から speed を削った(2025年11月7日 ee46131)ことに
-# 追従している(README.md「構成」)。
-ARG LISHOGI_BOT_COMMIT=201af8a4522bb0c5b4a390686e6223f45fd1a2cc
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git \
-    && rm -rf /var/lib/apt/lists/* \
-    && git clone https://github.com/stepney141/lishogi-bot /opt/lishogi-bot \
-    && git -C /opt/lishogi-bot checkout --detach "$LISHOGI_BOT_COMMIT" \
-    && pip install --no-cache-dir -r /opt/lishogi-bot/requirements.txt \
-    && apt-get purge -y git && apt-get autoremove -y \
+# 実行に必要なソースだけを取り込み、隣のリポジトリの設定や認証情報は含めない。
+COPY --from=lishogi-bot-source /requirements.txt /opt/lishogi-bot/requirements.txt
+RUN pip install --no-cache-dir -r /opt/lishogi-bot/requirements.txt \
     && useradd --create-home --uid 10001 app \
     && mkdir -p /var/log/lishogi-bot && chown app /var/log/lishogi-bot
+COPY --from=lishogi-bot-source /*.py /opt/lishogi-bot/
+COPY --from=lishogi-bot-source /engine_ctrl /opt/lishogi-bot/engine_ctrl
 COPY --from=minase-build /build/minase/target/release/minase /opt/minase/minase
 COPY minase-lishogi /opt/minase/minase-lishogi
 # 設定ファイルはイメージへ入れず、compose.yml が config.yml を

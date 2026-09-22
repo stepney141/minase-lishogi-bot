@@ -1,14 +1,16 @@
 # minase の lishogi Bot を動かす compose 定義(手順は README.md)。
 # .env に LISHOGI_BOT_TOKEN と資源上限を置き、`docker compose up --build -d` で
 # minase のデフォルトブランチの最新コミットを取得・ビルドして起動する(minase-gui と同じ方式)。
+# Lishogi-Bot は隣の ../lishogi-bot のソースを直接取り込む。
 # 設定ファイルは同じディレクトリの config.yml をマウントするので、
-# 変更は `docker compose up -d --no-build` で反映され、再ビルドは要らない。
+# 変更は `docker compose up -d --no-build --force-recreate` で反映し、再ビルドは要らない。
 services:
   bot:
     build:
       context: .
       additional_contexts:
         minase-source: https://github.com/stepney141/minase.git
+        lishogi-bot-source: ../lishogi-bot
     platform: linux/amd64
     init: true
     restart: unless-stopped

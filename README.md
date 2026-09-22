@@ -2,22 +2,24 @@
 
 中将棋エンジン[minase](https://github.com/stepney141/minase)を、オンライン対局サイトlishogiのBotアカウントとして動かすための配備一式である。
 minase本体はUSIエンジンとして呼ばれる側であり、lishogiの知識を持たない。
-lishogiのBot APIとUSIの仲介は、Python製ブリッジ[stepney141/lishogi-bot](https://github.com/stepney141/lishogi-bot)を固定した版（コミット201af8a、2026年9月21日）で使う。
-これは[nhamil/lishogi-bot](https://github.com/nhamil/lishogi-bot)のコミットdb18bd2（2026年3月14日）にponderの修正を2コミット加えたフォークである。
+lishogiのBot APIとUSIの仲介は、隣の`../lishogi-bot`に置いたPython製ブリッジ[stepney141/lishogi-bot](https://github.com/stepney141/lishogi-bot)を使う。
+これは[nhamil/lishogi-bot](https://github.com/nhamil/lishogi-bot)のコミットdb18bd2（2026年3月14日）にponderと通信対局の修正を加えたフォークである。
 nhamil版は[TheYoBots/Lishogi-Bot](https://github.com/TheYoBots/Lishogi-Bot)のコミット17c16bc（2024年10月26日）のフォークであり、lishogi側のAPI変更への追従（後述）を含む。
 
 ## 構成
 
-固定した版のLishogi-Botと固定コミットのminaseを1つのDockerイメージにまとめ、運用機ではそのイメージを認証トークンだけを与えて起動する。
+ローカルのLishogi-BotとGitHubから取得したminaseを1つのDockerイメージにまとめ、運用機ではそのイメージを認証トークンと資源上限を与えて起動する。
 
 | ファイル | 役割 |
 |---|---|
-| `Dockerfile` | 2段階ビルド。第1段階はrust:1.98でminaseをビルドし、第2段階はpython:3.11-slimへLishogi-Botを固定コミットで取得して依存パッケージを入れ、minaseのバイナリと起動ラッパーを置く。コンテナは非rootユーザー（uid 10001）で動く。 |
-| `compose.yml` | ビルドと起動の定義。minaseのソースは`additional_contexts`でGitHubの`minase.git`を名前付き文脈として渡し、Dockerfileが`COPY --from=minase-source`で取り込む（minase-guiと同じ方式）。ビルド時にデフォルトブランチの最新コミットを取得する。ログは名前付きボリュームに残る。 |
+| `Dockerfile` | 2段階ビルド。第1段階はrust:1.98でminaseをビルドし、第2段階はpython:3.11-slimへLishogi-Botのソースと依存パッケージ、minaseのバイナリ、起動ラッパーを置く。コンテナは非rootユーザー（uid 10001）で動く。 |
+| `compose.yml` | ビルドと起動の定義。`additional_contexts`でGitHubの`minase.git`とローカルの`../lishogi-bot`を渡す。minaseはデフォルトブランチの最新コミットを取得し、Lishogi-Botは未コミットの変更も含めて取り込む。ログは名前付きボリュームに残る。 |
 | `.env.example` | `.env`の雛形。認証トークンとコンテナの資源上限を置く。 |
 | `minase-lishogi` | `--protocol usi --rules lishogi`を固定してminaseを起動するシェルスクリプト。 |
 | `config.yml` | Lishogi-Botの設定。コンテナへ読み取り専用でマウントする。 |
 | `ponder_check.py` | lishogiへ接続せずに、イメージの中でLishogi-Botの関数を呼んで先読み（ponder）の通信を確かめるスクリプト（後述）。 |
+| `test_correspondence.py` | 挑戦の受諾、通信対局の時間管理、切断と再接続を、APIとエンジンの入出力を模擬して検証する。 |
+| `correspondence_check.py` | 通信対局の対局ループで実際のminaseを60秒の予算で動かし、合法手を返すことを確かめる。 |
 
 `minase-lishogi`が必要なのは、Lishogi-Botの`engine_options`が使えないためである。
 `engine_options`を与えるとLishogi-Botは起動コマンドを引数つきのリストのまま`shell=True`で`Popen`に渡すので、引数はシェルの位置引数になってエンジンへ届かず、`--protocol`を欠いたminaseは直ちに終了する（`engine_wrapper.py`の`create_engine`、`engine_ctrl/usi.py`の`open_process`）。
@@ -26,12 +28,13 @@ TheYoBots版ではなくnhamil版を土台にするのは、lishogiが2025年11�
 TheYoBots版の17c16bcは`model.py`の`Challenge.__init__`で`speed`を必須として読むので、挑戦を受け取った瞬間に`KeyError`で主ループが落ちる。
 落ちた後も子プロセスがイベントストリームへ再接続し続けるためコンテナは動いたままになり、lishogi上ではBotがオンラインに見えるのに挑戦に応答しない。
 nhamil版のコミットe0a3169は、`speed`が無いときに削られる前のlishogiと同じ規則で`timeControl`から求める。
-推定総秒数を持ち時間＋60×加算＋25×秒読み回数×秒読み秒数とし、60秒未満をultraBullet、300秒未満をbullet、600秒未満をblitz、1,500秒未満をrapid、それ以上をclassicalとし、`perf.name`がcorrespondenceならcorrespondenceとする（scalashogiのコミット0cad44cの`Speed.byTime`と`Clock.Config.estimateTotalSeconds`と同じ境界）。
+通常対局では推定総秒数を持ち時間＋60×加算＋25×秒読み回数×秒読み秒数とし、60秒未満をultraBullet、300秒未満をbullet、600秒未満をblitz、1,500秒未満をrapid、それ以上をclassicalとする（scalashogiのコミット0cad44cの`Speed.byTime`と`Clock.Config.estimateTotalSeconds`と同じ境界）。
+通信対局の挑戦は`timeControl.type`で判定する。
 この規則により、`config.yml`の`time_controls`は従来どおりblitz、rapid、classicalの名前で指定できる。
 nhamil版は17c16bcに対してこのほか、秒読みが0でないときの下限`min_nonzero_byoyomi`、挑戦者の許可リストと拒否リスト（`allow_list`、`block_list`、`bot_allow_list`、`bot_block_list`）、および京都将棋の指し手をリストで受ける修正を加えている。
 いずれも設定を省略すれば無効であり、`config.yml`では使っていない。
 
-stepney141版がnhamil版に加えるのは、ponderの2つの修正（コミット1cbfcb9と201af8a）だけである。
+stepney141版は、ponderの2つの修正（コミット1cbfcb9と201af8a）と、後述する通信対局への対応を加えている。
 nhamil版はStandard以外の変則で、先読みの`go ponder`に自分の着手と予想手を含まない局面を渡す。
 StandardとCheckshogi以外では予想手との照合もnull手との比較になり、`ponderhit`が成立しない。
 修正後は、自分の着手と予想手を加えた手順を渡し、エンジンへ送る記法の最終手と予想手を照合する。
@@ -42,7 +45,8 @@ lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を
 
 ## 前提
 
-- Docker（Compose v2を含む）。ビルド時にGitHubからminaseとLishogi-Botを取得するので、ビルド機はネットワークに出られる必要がある。
+- Docker（Compose v2を含む）が必要である。ビルド時にGitHubからminaseを取得するので、ビルド機はネットワークに出られる必要がある。
+- 通信対局の修正を含むLishogi-Botのソースを`../lishogi-bot`に置く。DockerfileはPythonのソースと`engine_ctrl`、依存パッケージの一覧だけを取り込み、そのリポジトリの設定ファイルは取り込まない。
 - `bot:play`スコープの認証トークン。対局履歴のない新規アカウントで発行する。昇格は取り消せず、一度でも対局したアカウントは昇格できない。
 
 ## 手順
@@ -62,11 +66,12 @@ lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を
    docker compose logs -f
    ```
 
-4. 運用の開始と終了、使用コミット、および受け付けた対局条件を記録する。Botのプロフィールにはエンジン名、リポジトリの所在、および運用中のコミットを記す。
+4. 運用の開始と終了、使用コミット、および受け付けた対局条件を記録する。Lishogi-Botは`git -C ../lishogi-bot rev-parse HEAD`と`git -C ../lishogi-bot diff`でビルドしたソースを記録する。Botのプロフィールにはエンジン名、リポジトリの所在、および運用中のコミットを記す。
 
 エンジンを更新するときは、`docker compose up --build -d`を再実行する。コンテナの再起動だけではminaseを取得し直さない。取得またはビルドに失敗した場合は更新を失敗として扱う。
 更新はminaseのデフォルトブランチが進んだときに行う。
-設定ファイルの変更（`Threads`、`USI_Hash`、受け付ける時間制御、`modes`への`rated`の追加）は、イメージの再ビルドを要せず、`docker compose up -d --no-build`で反映する。
+Lishogi-Botのコードを変更した場合も再ビルドする。
+設定ファイルだけの変更は、イメージの再ビルドを要せず、`docker compose up -d --no-build --force-recreate`で反映する。
 `.env`のCPU数は`config.yml`の`Threads`に同時対局数を掛けた値にし、メモリ上限は`USI_Hash`に同時対局数を掛けた値より大きくする。
 コンテナは非rootユーザーで動くため、`config.yml`は他ユーザーも読める644にする。
 
@@ -77,14 +82,48 @@ Lishogi-Botは`token`の項目自体を必須とするので、設定ファイ�
 `Threads`、`USI_Hash`、受け付ける時間制御の範囲は運用パラメータであり、運用機に合わせて変える。
 
 - `engine.name`はラッパー`minase-lishogi`を指す。`engine_options`は使わない。
-- `ponder`は有効にする。minaseは`bestmove`に予想手を付け、`go ponder`と`ponderhit`に対応する（minaseの`docs/plans/ponder.md`）。先読みの間も`Threads`の数だけCPUを使うので、コンテナのCPU数は「`Threads`×同時対局数」を下回らないようにする。
+- 通常対局では`engine.ponder`を有効にし、通信対局では`correspondence.ponder`を無効にする。minaseは`bestmove`に予想手を付け、`go ponder`と`ponderhit`に対応する（minaseの`docs/plans/ponder.md`）。先読みの間も`Threads`の数だけCPUを使うので、コンテナのCPU数は「`Threads`×同時対局数」を下回らないようにする。
 - `go_commands`は与えない。深さやノード数の上書きは時間管理を無効にする。
 - `move_overhead`は1,900ミリ秒を明示する。雛形の値と、項目を省略したときのコード上の既定値（1,000ミリ秒）が異なるためである。
 - 同時対局数（`challenge.concurrency`）は2にする。Lishogi-Botは対局ごとにエンジンのプロセスを1つ起動するので、`Threads`と`USI_Hash`は1局あたりの値である。コンテナのCPU数とメモリ上限を2局分にしておけば、対局どうしが探索スレッドと置換表を奪い合うことはない。
-- 超早指し（ultraBullet、bullet）と通信対局は受け付けない。
+- 超早指し（ultraBullet、bullet）は受け付けず、blitz、rapid、classicalと通信対局を受け付ける。
 - 公開は非レート対局（`modes: [casual]`）から始め、異常0件を確認してから`rated`を加える。
 
-## 時計の換算と注意
+## 通信対局
+
+通信対局では初手から1手60秒を思考時間の上限とし、相手の手番では先読みしない。
+残り時間が少ないときは、残り時間から通信の余裕と処理の経過時間を引いた値まで思考時間を短縮する。
+その値が0以下なら、エンジンには最小の1ミリ秒を指定する。
+対局上の期限は挑戦者が指定する1手あたり1、2、3、5、7、10、14日であり、ボットの思考時間とは別である。
+`max_base`と`min_base`は通常対局の受諾条件であり、通信対局の日数を制限しない。
+
+着手後は相手の応手を150秒待ち、応手がなければ接続を閉じてエンジンを終了する。
+ボットは600秒ごとに、処理枠に空きがあれば待機中の対局へ再接続する。
+序盤の30秒自動中断は通常対局だけに適用するため、通信対局では相手がすぐに指さなくても中断しない。
+再起動時もイベントストリームに届く進行中の対局を開き、対局ストリームの時計の有無で通常対局と通信対局を判定する。
+
+この判定には`perf`を使わない。
+中将棋では通信対局でも`perf`が中将棋を示すため、挑戦の`timeControl.type`と対局ストリームの`clock`を使う（[挑戦の出力形式](https://github.com/WandererXII/lishogi/blob/master/modules/challenge/src/main/JsonView.scala)、[対局ストリームの出力形式](https://github.com/WandererXII/lishogi/blob/master/modules/bot/src/main/BotJsonView.scala)）。
+
+修正後のイメージをビルドし、次の2つの検証を行う。
+前者は受諾条件、思考時間、序盤の待機、切断後と再起動後の再開、終局時の解放を検証する。
+後者は実際のminaseを起動し、初手に`go movetime 60000`を送り、合法手が返ることを確認する。
+いずれも認証トークンを渡さず、ネットワークを無効にして実行する。
+
+```console
+docker compose build
+docker run --rm --network none \
+  -v ./config.yml:/opt/lishogi-bot/config.yml:ro \
+  -v ./test_correspondence.py:/opt/lishogi-bot/test_correspondence.py:ro \
+  --entrypoint python3 minase-lishogi-bot-bot \
+  -m pytest -q -p no:cacheprovider test_correspondence.py
+docker run --rm --network none --cpus 4 \
+  -v ./config.yml:/opt/lishogi-bot/config.yml:ro \
+  -v ./correspondence_check.py:/opt/lishogi-bot/correspondence_check.py:ro \
+  --entrypoint python3 minase-lishogi-bot-bot correspondence_check.py
+```
+
+## 通常対局の時計の換算と注意
 
 Lishogi-Botは、自分の手番で`go`を送る前に、残り時間から`move_overhead`と受信からの経過時間を引いて0で切り上げ、さらに秒読みと加算を引いて0で切り上げた値を`btime`または`wtime`に入れる。
 秒読みと加算は別に`byoyomi`、`binc`、`winc`として送り、秒読みの回数（periods）は送らない。
@@ -100,7 +139,7 @@ minaseの予算式は秒読みの8割を上限にするので、サーバへの�
 
 `ponder_check.py`は、lishogiへ接続せずに、配備と同じイメージの中でLishogi-Botの関数（`play_midgame_move`、`start_pondering`、`get_pondering_result`、および終局時の停止）を対局ループと同じ順に呼び、エンジンとの送受信を確かめる。
 確かめる内容は、`go ponder`の局面が自分の着手と予想手を含むこと、`ponderhit`または`stop`より前に`bestmove`が届かないこと、的中で`ponderhit`だけが送られること、外れで`stop`の後に`bestmove`が1回だけ届いて通常の`go`へ進めること、秒読みの消化中の`go ponder`が残り時間0と秒読みを送り、的中後の思考が秒読みに収まること、および先読み中の終局で`position`、`stop`、`quit`の後にエンジンが終了することである。
-Lishogi-Botの固定コミット、minase、または`config.yml`の`ponder`を変えたときに、イメージをビルドしてから次のコマンドで実行し、最後に`ALL CHECKS PASSED`が出ることを確かめる。
+Lishogi-Botのコード、minase、または`config.yml`の`ponder`を変えたときに、イメージをビルドしてから次のコマンドで実行し、最後に`ALL CHECKS PASSED`が出ることを確かめる。
 スクリプトの実行には認証トークンを使わず、運用中のコンテナにも触れない。
 
 ```console
