@@ -43,6 +43,7 @@ full = {
 }
 api = Mock(baseUrl="https://lishogi.invalid/")
 api.get_game_stream.return_value.iter_lines.return_value = iter([json.dumps(full).encode()])
+api.get_ongoing_games.return_value = []
 control, pending = Queue(), Queue()
 started = time.monotonic()
 bot.play_game.__wrapped__(api, "offline", control, {"username": "bot"}, config,
@@ -55,7 +56,7 @@ api.abort.assert_not_called()
 api.get_game_stream.return_value.close.assert_called_once()
 assert game_id == "offline"
 assert pending.get_nowait() == "offline"
-assert control.get_nowait() == {"type": "free_process"}
+assert control.get_nowait() == {"type": "free_process", "gameId": "offline"}
 assert "stop" in commands and "quit" in commands
 
 # minase自身の合法手一覧と照合する。探索時間だけで合否を決めない。

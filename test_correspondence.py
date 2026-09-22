@@ -108,6 +108,7 @@ def session(monkeypatch):
 def play(config, session, full, updates=(), username="bot"):
     wire, now = session
     api = Mock(baseUrl="https://lishogi.invalid/")
+    api.get_ongoing_games.return_value = []
 
     def lines():
         yield json.dumps(full).encode()
@@ -120,7 +121,7 @@ def play(config, session, full, updates=(), username="bot"):
     # Retry delays are irrelevant with a deterministic stream; propagate failures directly.
     bot.play_game.__wrapped__(api, "offline", control, {"username": username}, config,
                               [], correspondence, Queue(), lambda *_: None, logging.CRITICAL)
-    assert control.get_nowait() == {"type": "free_process"}
+    assert control.get_nowait() == {"type": "free_process", "gameId": "offline"}
     assert wire.lines[-2:] == ["stop", "quit"]
     assert wire.killed
     return api, correspondence
@@ -196,7 +197,7 @@ def test_startup_resumes_chushogi_on_opponents_turn(config, monkeypatch, game_co
     for game_id in game_ids:
         control.put({"type": "gameStart", "game": {"id": game_id}})
     if game_count > 2:
-        control.put({"type": "free_process"})
+        control.put({"type": "free_process", "gameId": game_ids[0]})
         control.put({"type": "correspondence_ping"})
     control.put({"type": "terminated"})
     manager = Mock()

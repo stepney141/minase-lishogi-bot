@@ -154,8 +154,10 @@ moves.append(legal_moves(helper, moves)[0])
 
 print("== 4. game ends while pondering ==")
 game, board = make_game(moves, *clock), make_board(moves)
+# 予想手の出力は任意なので、停止の検証には合法な2手を入力として与える。
+best = legal_moves(helper, moves)[0]
+ponder = legal_moves(helper, moves + [best])[0]
 start = time.perf_counter_ns()
-best, ponder = lb.play_midgame_move(engine, board, clock[0], clock[1], OVERHEAD, start, lb.logger, game)
 thread, _ = lb.start_pondering(engine, board, best, ponder, clock[0], clock[1], game, lb.logger, OVERHEAD, start, True)
 time.sleep(0.5)
 final = moves + [best, legal_moves(helper, moves + [best])[0]]

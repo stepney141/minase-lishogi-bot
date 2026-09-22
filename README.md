@@ -19,6 +19,7 @@ nhamil版は[TheYoBots/Lishogi-Bot](https://github.com/TheYoBots/Lishogi-Bot)の
 | `config.yml` | Lishogi-Botの設定。コンテナへ読み取り専用でマウントする。 |
 | `ponder_check.py` | lishogiへ接続せずに、イメージの中でLishogi-Botの関数を呼んで先読み（ponder）の通信を確かめるスクリプト（後述）。 |
 | `test_correspondence.py` | 挑戦の受諾、通信対局の時間管理、切断と再接続を、APIとエンジンの入出力を模擬して検証する。 |
+| `test_streams.py` | 無応答時のタイムアウト、対局への再接続、終局後の先読み停止と処理枠の解放、重複起動の防止を検証する。 |
 | `correspondence_check.py` | 通信対局の対局ループで実際のminaseを60秒の予算で動かし、合法手を返すことを確かめる。 |
 
 `minase-lishogi`が必要なのは、Lishogi-Botの`engine_options`が使えないためである。
@@ -121,6 +122,28 @@ docker run --rm --network none --cpus 4 \
   -v ./config.yml:/opt/lishogi-bot/config.yml:ro \
   -v ./correspondence_check.py:/opt/lishogi-bot/correspondence_check.py:ro \
   --entrypoint python3 minase-lishogi-bot-bot correspondence_check.py
+```
+
+## 通信停止からの復旧
+
+イベントと対局のストリームには、接続に10秒、無受信に30秒のタイムアウトを設定する。
+受信が途絶えた場合は警告を記録し、イベントストリームへ再接続する。
+対局ストリームは進行中の対局一覧と照合し、対局が続いていれば再接続して最新局面から処理を再開する。
+対局が終了していればエンジンを停止し、処理枠を解放する。
+再接続時に同じ対局の開始通知を受けても、処理中の対局は重複起動しない。
+
+2026年9月22日の障害では、サーバーからの受信が日本時間15:42ごろに途絶え、対局`1z3YZqtK`が時間切れで終了した後も先読みが残っていた。
+修正前はストリームの受信待ちに時間制限がなく、終局後もエンジンが動き続ける状態を検知できなかった。
+ログの`correspondence_ping`は内部の定期通知であり、lishogiとの接続が生きている証拠にはならない。
+`test_streams.py`はローカルのHTTPサーバーから送信を止めてこの待ち状態を再現し、模擬した対局状態で復旧と終了処理を検証する。
+
+```console
+docker run --rm --network none \
+  -v ./config.yml:/opt/lishogi-bot/config.yml:ro \
+  -v ./test_correspondence.py:/opt/lishogi-bot/test_correspondence.py:ro \
+  -v ./test_streams.py:/opt/lishogi-bot/test_streams.py:ro \
+  --entrypoint python3 minase-lishogi-bot-bot \
+  -m pytest -q -W error -p no:cacheprovider test_streams.py test_correspondence.py test_ponder.py
 ```
 
 ## 通常対局の時計の換算と注意
