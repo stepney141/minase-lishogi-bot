@@ -2,7 +2,7 @@
 
 入力形式はlishogiのchallenge/JsonView、bot/BotJsonView、game/JsonViewに基づく。
 中将棋のperfは通信対局でも中将棋を示す。時間制御で受諾と対局処理を選ぶ。
-config.ymlの運用方針は1手60秒、150秒で切断、600秒ごとに確認、先読みなし。
+config.ymlの運用方針は1手300秒、150秒で切断、600秒ごとに確認、先読みなし。
 """
 
 import copy
@@ -128,10 +128,10 @@ def play(config, session, full, updates=(), username="bot"):
 
 
 @pytest.mark.parametrize("moves, username", [("", "bot"), ("7i7h", "opponent"), ("7i7h 6d6e", "bot")])
-def test_every_correspondence_turn_uses_60_seconds_without_ponder(config, session, moves, username):
+def test_every_correspondence_turn_uses_300_seconds_without_ponder(config, session, moves, username):
     full = game_full(moves)
     api, pending = play(config, session, full, username=username)
-    assert [line for line in session[0].lines if line.startswith("go ")] == ["go movetime 60000"]
+    assert [line for line in session[0].lines if line.startswith("go ")] == ["go movetime 300000"]
     api.make_move.assert_called_once_with("offline", "7h7g")
     api.abort.assert_not_called()
     assert pending.get_nowait() == "offline"

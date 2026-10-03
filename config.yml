@@ -23,7 +23,7 @@ rate_limiting_delay: 0
 move_overhead: 1900
 
 correspondence:
-  move_time: 60
+  move_time: 300
   checkin_period: 600
   disconnect_time: 150
   ponder: false

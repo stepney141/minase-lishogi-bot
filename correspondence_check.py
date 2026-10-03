@@ -14,7 +14,7 @@ import engine_wrapper
 
 bot = importlib.import_module("lishogi-bot")
 config = yaml.safe_load(Path("config.yml").read_text())
-assert config["correspondence"]["move_time"] == 60
+assert config["correspondence"]["move_time"] == 300
 assert config["correspondence"]["ponder"] is False
 
 commands = []
@@ -49,7 +49,7 @@ started = time.monotonic()
 bot.play_game.__wrapped__(api, "offline", control, {"username": "bot"}, config,
                           [], pending, Queue(), lambda *_: None, logging.DEBUG)
 elapsed = time.monotonic() - started
-assert [line for line in commands if line.startswith("go ")] == ["go movetime 60000"]
+assert [line for line in commands if line.startswith("go ")] == ["go movetime 300000"]
 api.make_move.assert_called_once()
 game_id, move = api.make_move.call_args.args
 api.abort.assert_not_called()
@@ -72,4 +72,4 @@ try:
 finally:
     helper.quit()
     helper.engine.proccess.wait(10)
-print(f"ALL CHECKS PASSED: legal move {move}, 60 s budget, elapsed {elapsed:.3f} s")
+print(f"ALL CHECKS PASSED: legal move {move}, 300 s budget, elapsed {elapsed:.3f} s")
