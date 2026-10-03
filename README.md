@@ -35,7 +35,7 @@ nhamil版のコミットe0a3169は、`speed`が無いときに削られる前の
 nhamil版は17c16bcに対してこのほか、秒読みが0でないときの下限`min_nonzero_byoyomi`、挑戦者の許可リストと拒否リスト（`allow_list`、`block_list`、`bot_allow_list`、`bot_block_list`）、および京都将棋の指し手をリストで受ける修正を加えている。
 いずれも設定を省略すれば無効であり、`config.yml`では使っていない。
 
-stepney141版は、ponderの2つの修正（コミット1cbfcb9と201af8a）、後述する通信対局への対応、および投了の対応（コミット7568380）を加えている。
+stepney141版は、ponderの2つの修正（コミット1cbfcb9と201af8a）、後述する通信対局への対応、投了の対応（コミット7568380）、および初期局面の手番の修正（コミット366e9cb）を加えている。
 nhamil版はStandard以外の変則で、先読みの`go ponder`に自分の着手と予想手を含まない局面を渡す。
 StandardとCheckshogi以外では予想手との照合もnull手との比較になり、`ponderhit`が成立しない。
 修正後は、自分の着手と予想手を加えた手順を渡し、エンジンへ送る記法の最終手と予想手を照合する。
@@ -46,6 +46,11 @@ lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を
 コミット7568380は、エンジンが`bestmove resign`を返したときに、それを着手として送る代わりに対局APIの投了を呼び、先読みを始めない。
 上流は`bestmove`の2語目をそのまま着手として送るので、修正前はminaseの投了が着手の送信失敗になった。
 外れた先読みの結果は従来どおり捨てるので、その経路の`bestmove resign`は投了にならない（`test_resign.py`）。
+コミット366e9cbは、StandardとCheckshogi以外の変則で、手番を初期SFENの手番から数え始めるようにする。
+上流の`setup_board`は、これらの変則では空の盤にnull手を積んで手番を数えるので、着手0の局面を常に先手番とみなす。
+2026年10月3日の対局`yCbfKMbm`では、挑戦者が後手番から始まる中将棋の局面を指定し、後手のminaseは自分の手番に探索を始めず、対局は着手のないまま中止された。
+修正後は初期SFENの手番が`w`なら後手番から数えるので、後手から始まる局面でもminaseが初手を指す（`test_setup_board.py`）。
+駒の配置を変えた局面は、修正前から初期SFENのままエンジンへ渡している。
 
 ## 前提
 
@@ -147,7 +152,7 @@ docker run --rm --network none \
   -v ./test_correspondence.py:/opt/lishogi-bot/test_correspondence.py:ro \
   -v ./test_streams.py:/opt/lishogi-bot/test_streams.py:ro \
   --entrypoint python3 minase-lishogi-bot-bot \
-  -m pytest -q -W error -p no:cacheprovider test_streams.py test_correspondence.py test_ponder.py test_resign.py
+  -m pytest -q -W error -p no:cacheprovider test_streams.py test_correspondence.py test_ponder.py test_resign.py test_setup_board.py
 ```
 
 ## 通常対局の時計の換算と注意
