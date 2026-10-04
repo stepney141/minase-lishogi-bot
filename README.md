@@ -8,12 +8,12 @@ nhamil版は[TheYoBots/Lishogi-Bot](https://github.com/TheYoBots/Lishogi-Bot)の
 
 ## 構成
 
-ローカルのLishogi-BotとGitHubから取得したminaseを1つのDockerイメージにまとめ、運用機ではそのイメージを認証トークンと資源上限を与えて起動する。
+ローカルのLishogi-Botとcrates.ioで公開されたminaseを1つのDockerイメージにまとめ、運用機ではそのイメージを認証トークンと資源上限を与えて起動する。
 
 | ファイル | 役割 |
 |---|---|
-| `Dockerfile` | 2段階ビルド。第1段階はrust:1.98でminaseをビルドし、第2段階はpython:3.11-slimへLishogi-Botのソースと依存パッケージ、minaseのバイナリ、起動ラッパーを置く。コンテナは非rootユーザー（uid 10001）で動く。 |
-| `compose.yml` | ビルドと起動の定義。`additional_contexts`でGitHubの`minase.git`とローカルの`../lishogi-bot`を渡す。minaseはデフォルトブランチの最新コミットを取得し、Lishogi-Botは未コミットの変更も含めて取り込む。ログは名前付きボリュームに残る。 |
+| `Dockerfile` | 2段階ビルド。第1段階はrust:1.98でcrates.ioから版を固定した`minase`をビルドし、第2段階はpython:3.11-slimへLishogi-Botのソースと依存パッケージ、minaseのバイナリ、起動ラッパーを置く。コンテナは非rootユーザー（uid 10001）で動く。 |
+| `compose.yml` | ビルドと起動の定義。`additional_contexts`でローカルの`../lishogi-bot`を渡し、Lishogi-Botは未コミットの変更も含めて取り込む。ログは名前付きボリュームに残る。 |
 | `.env.example` | `.env`の雛形。認証トークンとコンテナの資源上限を置く。 |
 | `minase-lishogi` | `--protocol usi --rules lishogi`を固定してminaseを起動するシェルスクリプト。 |
 | `config.yml` | Lishogi-Botの設定。コンテナへ読み取り専用でマウントする。 |
@@ -54,7 +54,8 @@ lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を
 
 ## 前提
 
-- Docker（Compose v2を含む）が必要である。ビルド時にGitHubからminaseを取得するので、ビルド機はネットワークに出られる必要がある。
+- Docker（Compose v2を含む）が必要である。ビルド時にcrates.ioからminaseを取得するので、ビルド機はネットワークに出られる必要がある。
+- イメージは運用機でビルドする。minaseは`-C target-cpu=native`でビルドするため、生成されたバイナリはビルド機のCPUが持つ命令拡張を使い、それを持たないCPUでは不正命令で停止しうる。別の機械でビルドしたイメージを運用機へ持ち込まない。
 - 通信対局の修正を含むLishogi-Botのソースを`../lishogi-bot`に置く。DockerfileはPythonのソースと`engine_ctrl`、依存パッケージの一覧だけを取り込み、そのリポジトリの設定ファイルは取り込まない。
 - `bot:play`スコープの認証トークン。対局履歴のない新規アカウントで発行する。昇格は取り消せず、一度でも対局したアカウントは昇格できない。
 
@@ -68,17 +69,19 @@ lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を
    curl -X POST https://lishogi.org/api/bot/account/upgrade -H "Authorization: Bearer $LISHOGI_BOT_TOKEN"
    ```
 
-3. minaseのデフォルトブランチの最新コミットを取得・ビルドして起動し、挑戦の待受に入ったことと認証エラーがないことをログで確かめる。同じアカウントのBotを2つ起動しない。ビルド時点のコミットは`git ls-remote https://github.com/stepney141/minase.git HEAD`で確かめて記録する。
+3. `Dockerfile`の`cargo install`が指定する版のminaseをビルドして起動し、挑戦の待受に入ったことと認証エラーがないことをログで確かめる。同じアカウントのBotを2つ起動しない。
 
    ```console
    docker compose up --build -d
    docker compose logs -f
    ```
 
-4. 運用の開始と終了、使用コミット、および受け付けた対局条件を記録する。Lishogi-Botは`git -C ../lishogi-bot rev-parse HEAD`と`git -C ../lishogi-bot diff`でビルドしたソースを記録する。Botのプロフィールにはエンジン名、リポジトリの所在、および運用中のコミットを記す。
+4. 運用の開始と終了、minaseの版とLishogi-Botのコミット、および受け付けた対局条件を記録する。Lishogi-Botは`git -C ../lishogi-bot rev-parse HEAD`と`git -C ../lishogi-bot diff`でビルドしたソースを記録する。Botのプロフィールにはエンジン名、リポジトリの所在、および運用中の版を記す。
 
-エンジンを更新するときは、`docker compose up --build -d`を再実行する。コンテナの再起動だけではminaseを取得し直さない。取得またはビルドに失敗した場合は更新を失敗として扱う。
-更新はminaseのデフォルトブランチが進んだときに行う。
+minaseの版は`Dockerfile`の`cargo install minase --version`の1か所だけで指定する。
+エンジンを更新するときは、crates.ioに公開された新しい版をこの指定に書き、`docker compose up --build -d`を再実行する。
+指定を変えなければ、再ビルドしてもDockerのキャッシュにある同じバイナリが使われる。取得またはビルドに失敗した場合は更新を失敗として扱う。
+運用機のCPUを替えたときは、`target-cpu=native`の結果を作り直すため、`docker compose build --no-cache`で再ビルドする。
 Lishogi-Botのコードを変更した場合も再ビルドする。
 設定ファイルだけの変更は、イメージの再ビルドを要せず、`docker compose up -d --no-build --force-recreate`で反映する。
 `.env`のCPU数は`config.yml`の`Threads`に同時対局数を掛けた値にし、メモリ上限は`USI_Hash`に同時対局数を掛けた値より大きくする。
