@@ -12,9 +12,9 @@ nhamil版は[TheYoBots/Lishogi-Bot](https://github.com/TheYoBots/Lishogi-Bot)の
 
 | ファイル | 役割 |
 |---|---|
-| `Dockerfile` | 2段階ビルド。第1段階はrust:1.98でcrates.ioから版を固定した`minase`をビルドし、第2段階はpython:3.11-slimへLishogi-Botのソースと依存パッケージ、minaseのバイナリ、起動ラッパーを置く。コンテナは非rootユーザー（uid 10001）で動く。 |
-| `compose.yml` | ビルドと起動の定義。`additional_contexts`でローカルの`../lishogi-bot`を渡し、Lishogi-Botは未コミットの変更も含めて取り込む。ログは名前付きボリュームに残る。 |
-| `.env.example` | `.env`の雛形。認証トークンとコンテナの資源上限を置く。 |
+| `Dockerfile` | 2段階ビルド。第1段階はrust:1.98でcrates.ioから版を固定した`minase`をビルドし、第2段階はpython:3.11-slimへLishogi-Botのソースと依存パッケージ、minaseのバイナリ、起動ラッパーを置く。コンテナは非rootユーザーで動き、そのuidとgidはビルド時に`.env`から受け取る。 |
+| `compose.yml` | ビルドと起動の定義。`additional_contexts`でローカルの`../lishogi-bot`を渡し、Lishogi-Botは未コミットの変更も含めて取り込む。ログは`logs/lishogi-bot.log`に出る。 |
+| `.env.example` | `.env`の雛形。認証トークン、コンテナの資源上限、およびコンテナのユーザーのuidとgidを置く。 |
 | `minase-lishogi` | `--protocol usi --rules lishogi`を固定してminaseを起動するシェルスクリプト。 |
 | `config.yml` | Lishogi-Botの設定。コンテナへ読み取り専用でマウントする。 |
 | `ponder_check.py` | lishogiへ接続せずに、イメージの中でLishogi-Botの関数を呼んで先読み（ponder）の通信を確かめるスクリプト（後述）。 |
@@ -62,6 +62,9 @@ lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を
 ## 手順
 
 1. `.env.example`を`.env`へ複製し、トークンを`LISHOGI_BOT_TOKEN`に書く。`.env`はGit管理の対象外である。
+   `MINASE_LISHOGI_BOT_UID`と`MINASE_LISHOGI_BOT_GID`には運用するユーザーの`id -u`と`id -g`の値を書き、`mkdir logs`でログの置き場を作る。
+   コンテナはこのuidとgidでログを書くので、ログはホストのユーザーの所有になる。
+   `logs/`が無いと起動は失敗する。Dockerに作らせるとroot所有になり、コンテナから書けないためである。`logs/`はGit管理の対象外である。
 
 2. 初回だけ、Botを起動せずにアカウントを昇格する。Lishogi-Botの`-u`は昇格後にそのまま挑戦の待受へ進むので使わず、同じAPIを直接呼ぶ。応答が`{"ok":true}`であることを確かめる。
 
@@ -85,7 +88,6 @@ minaseの版は`Dockerfile`の`cargo install minase --version`の1か所だけ�
 Lishogi-Botのコードを変更した場合も再ビルドする。
 設定ファイルだけの変更は、イメージの再ビルドを要せず、`docker compose up -d --no-build --force-recreate`で反映する。
 `.env`のCPU数は`config.yml`の`Threads`に同時対局数を掛けた値にし、メモリ上限は`USI_Hash`に同時対局数を掛けた値より大きくする。
-コンテナは非rootユーザーで動くため、`config.yml`は他ユーザーも読める644にする。
 
 ## 設定ファイル
 

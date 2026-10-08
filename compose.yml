@@ -11,6 +11,10 @@ services:
       context: .
       additional_contexts:
         lishogi-bot-source: ../lishogi-bot
+      # logs/ に書いたログをホストのユーザーが扱えるよう、コンテナのユーザーを同じ uid と gid で作る。
+      args:
+        APP_UID: ${MINASE_LISHOGI_BOT_UID:?Set MINASE_LISHOGI_BOT_UID in .env to the output of `id -u`}
+        APP_GID: ${MINASE_LISHOGI_BOT_GID:?Set MINASE_LISHOGI_BOT_GID in .env to the output of `id -g`}
     platform: linux/amd64
     init: true
     restart: unless-stopped
@@ -22,6 +26,10 @@ services:
     cpus: ${MINASE_LISHOGI_BOT_CPU_LIMIT:?Set MINASE_LISHOGI_BOT_CPU_LIMIT in .env}
     volumes:
       - ./config.yml:/opt/lishogi-bot/config.yml:ro
-      - lishogi-bot-logs:/var/log/lishogi-bot
-volumes:
-  lishogi-bot-logs:
+      # ログは logs/lishogi-bot.log に出る。logs/ が無いと Docker が root 所有で作るので、
+      # 自動では作らせず、無ければ起動を失敗させる。
+      - type: bind
+        source: ./logs
+        target: /var/log/lishogi-bot
+        bind:
+          create_host_path: false

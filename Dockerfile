@@ -13,11 +13,14 @@ ENV RUSTFLAGS="-C target-cpu=native" \
 RUN cargo install minase --version =2.0.0 --locked --bin minase --root /build
 
 FROM python:3.11-slim-bookworm AS runtime
+# ログはホストの logs/ へ書くので、compose.yml がホストのユーザーの uid と gid を渡す。
+ARG APP_UID
+ARG APP_GID
 # 実行に必要なソースだけを取り込み、隣のリポジトリの設定や認証情報は含めない。
 COPY --from=lishogi-bot-source /requirements.txt /opt/lishogi-bot/requirements.txt
 RUN pip install --no-cache-dir -r /opt/lishogi-bot/requirements.txt \
-    && useradd --create-home --uid 10001 app \
-    && mkdir -p /var/log/lishogi-bot && chown app /var/log/lishogi-bot
+    && groupadd --gid ${APP_GID} app \
+    && useradd --create-home --uid ${APP_UID} --gid ${APP_GID} app
 COPY --from=lishogi-bot-source /*.py /opt/lishogi-bot/
 COPY --from=lishogi-bot-source /engine_ctrl /opt/lishogi-bot/engine_ctrl
 COPY --from=minase-build /build/bin/minase /opt/minase/minase
