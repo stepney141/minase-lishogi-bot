@@ -7,7 +7,7 @@ FROM rust:1.98-bookworm AS minase-build
 # target-cpu=native はビルド機の CPU に特化するので、運用機でビルドする。
 # LTO と codegen-units=1 は 2.0.1 以降の crate 自身の release プロファイルが与える。
 ENV RUSTFLAGS="-C target-cpu=native"
-RUN cargo install minase --version =2.2.0 --locked --bin minase --root /build
+RUN cargo install minase --version =2.3.0 --locked --bin minase --root /build
 
 FROM python:3.11-slim-bookworm AS runtime
 # ログはホストの logs/ へ書くので、compose.yml がホストのユーザーの uid と gid を渡す。
