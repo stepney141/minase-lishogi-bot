@@ -30,6 +30,12 @@ logging.getLogger().addHandler(Capture())
 config = yaml.safe_load(open("config.yml"))
 assert config["engine"]["ponder"] is True
 OVERHEAD = config["move_overhead"]
+# 秒読み期は btime が 0 なので move_overhead は効かず、締切の余裕はエンジンの ByoyomiMargin だけが持つ。
+# minase の docs/plans/byoyomi-time-usage.md のフェーズ0は、この余裕を Bot 側の処理時間の最大値に
+# lishogi までの通信の見込み 500 ms を加えて定めた。Bot が測る思考時間には処理時間が含まれるので、
+# 的中後の思考は秒読みから通信の見込みを引いた時間に収まらなければならない。
+NETWORK_ALLOWANCE = 500
+assert config["engine"]["usi_options"]["ByoyomiMargin"] > NETWORK_ALLOWANCE, config["engine"]["usi_options"]
 
 
 def sent_since(mark):
@@ -147,7 +153,7 @@ print("== 3. byoyomi being consumed (clock reloaded to the byoyomi), hit ==")
 byo_clock = (10000, 10000, 0, 0, 10000)
 moves, best, ponder_clock, waited = turn(engine, moves, byo_clock, "hit", helper)
 assert ponder_clock["btime"] == 0 and ponder_clock["byoyomi"] == 10000, ponder_clock
-assert waited < 10.0 - OVERHEAD / 1000, f"thought {waited:.3f} s after ponderhit in a 10 s byoyomi"
+assert waited < 10.0 - NETWORK_ALLOWANCE / 1000, f"thought {waited:.3f} s after ponderhit in a 10 s byoyomi"
 print(f"ok: go ponder clock {ponder_clock}, ponderhit answered in {waited:.3f} s with {best}")
 moves.append(best)
 moves.append(legal_moves(helper, moves)[0])
