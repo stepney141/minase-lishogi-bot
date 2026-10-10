@@ -14,10 +14,10 @@ engine:
   usi_options:
     Threads: 4
     USI_Hash: 2048
-    # 秒読み期の締切に残す余裕(ms)。minase の docs/plans/byoyomi-time-usage.md のフェーズ0で、
-    # 秒読み期の Bot 側の処理時間の最大 12 ms に通信の見込み 500 ms を加えて定めた。
+    # 秒読み期の締切に残す余裕(ms)。600 ms では秒読みを上限まで使った手の 4.7% (213 手中 10 手)が
+    # 時間切れになったので、着手の POST の往復時間の実測(3 秒超は 25,799 手中 10 手)から 3000 ms にした。
     # このオプションを持たない版の minase は、USI の慣例どおり無視する。
-    ByoyomiMargin: 600
+    ByoyomiMargin: 3000
   silence_stderr: false
   startup_lines: 0
 
