@@ -31,10 +31,10 @@ config = yaml.safe_load(open("config.yml"))
 assert config["engine"]["ponder"] is True
 OVERHEAD = config["move_overhead"]
 # 秒読み期は btime が 0 なので move_overhead は効かず、締切の余裕はエンジンの ByoyomiMargin だけが持つ。
-# minase の docs/plans/byoyomi-time-usage.md のフェーズ0は、この余裕を Bot 側の処理時間の最大値に
-# lishogi までの通信の見込み 500 ms を加えて定めた。Bot が測る思考時間には処理時間が含まれるので、
-# 的中後の思考は秒読みから通信の見込みを引いた時間に収まらなければならない。
-NETWORK_ALLOWANCE = 500
+# 公開運用のログでは、bestmove から着手の POST の応答までが 2 秒を超えた手は 25,799 手中 57 手だった。
+# Bot が測る思考時間には処理時間が含まれるので、的中後の思考は秒読みからこの通信の見込みを引いた時間に
+# 収まらなければならない。
+NETWORK_ALLOWANCE = 2000
 assert config["engine"]["usi_options"]["ByoyomiMargin"] > NETWORK_ALLOWANCE, config["engine"]["usi_options"]
 
 
