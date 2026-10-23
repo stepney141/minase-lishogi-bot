@@ -19,7 +19,7 @@ engine:
     # このオプションを持たない版の minase は、USI の慣例どおり無視する。
     ByoyomiMargin: 3000
     # 千日手（R1）の引き分けに返す評価値(cp)。-1 にすると、評価値がちょうど同じ手の間でだけ
-    # 千日手を避ける。値の理由は minase の docs/plans/draw-value.md の設計判断「Botの設定」にある。
+    # 千日手を避ける。値の理由は minase の docs/adr/set-the-draw-value-by-usi-option-signed-from-the-root-side.md にある。
     # このオプションを持たない版の minase は、USI の慣例どおり無視する。
     DrawValueBlack: -1
     DrawValueWhite: -1
