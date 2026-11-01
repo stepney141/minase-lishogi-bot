@@ -26,8 +26,8 @@ services:
     cpus: ${MINASE_LISHOGI_BOT_CPU_LIMIT:?Set MINASE_LISHOGI_BOT_CPU_LIMIT in .env}
     volumes:
       - ./config.yml:/opt/lishogi-bot/config.yml:ro
-      # ログは logs/lishogi-bot.log に出る。logs/ が無いと Docker が root 所有で作るので、
-      # 自動では作らせず、無ければ起動を失敗させる。
+      # Bot 全体のログは logs/lishogi-bot.log に、各対局のログは logs/games/<対局ID>.log に出る。
+      # logs/ が無いと Docker が root 所有で作るので、自動では作らせず、無ければ起動を失敗させる。
       - type: bind
         source: ./logs
         target: /var/log/lishogi-bot

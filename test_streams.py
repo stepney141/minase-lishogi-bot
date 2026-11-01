@@ -91,7 +91,7 @@ def test_reconnect_uses_latest_position_and_releases_engine(config, session, fai
     api.get_ongoing_games.return_value = [{"gameId": "offline"}]
     control = Queue()
     bot.play_game.__wrapped__(api, "offline", control, {"username": "bot"}, config,
-                              [], Queue(), Queue(), lambda *_: None, logging.CRITICAL)
+                              [], Queue(), Queue(), lambda *_: None, logging.CRITICAL, None)
     api.make_move.assert_called_once_with("offline", "7h7g")
     assert "position startpos moves 7i7h 6d6e" in wire.lines
     assert wire.killed
@@ -132,7 +132,7 @@ def test_disconnect_after_game_ended_stops_ponder(config, session, monkeypatch):
     api.get_ongoing_games.return_value = []
     control = Queue()
     bot.play_game.__wrapped__(api, "offline", control, {"username": "bot"}, config,
-                              [], Queue(), Queue(), lambda *_: None, logging.CRITICAL)
+                              [], Queue(), Queue(), lambda *_: None, logging.CRITICAL, None)
     assert started.is_set()
     assert released.is_set()
     assert wire.killed
@@ -151,7 +151,7 @@ def test_failed_recovery_still_releases_engine(config, session):
     api.get_ongoing_games.side_effect = requests.exceptions.HTTPError(response=denied)
     with pytest.raises(requests.exceptions.HTTPError):
         bot.play_game.__wrapped__(api, "offline", Queue(), {"username": "bot"}, config,
-                                  [], Queue(), Queue(), lambda *_: None, logging.CRITICAL)
+                                  [], Queue(), Queue(), lambda *_: None, logging.CRITICAL, None)
     assert wire.killed
     assert wire.lines[-2:] == ["stop", "quit"]
     response.close.assert_called_once()
@@ -206,7 +206,7 @@ def test_expired_game_releases_slot_without_starting_engine(config, session):
     api.get_game_stream.side_effect = requests.exceptions.HTTPError(response=missing)
     control = Queue()
     bot.play_game.__wrapped__(api, "offline", control, {"username": "bot"}, config,
-                              [], Queue(), Queue(), lambda *_: None, logging.CRITICAL)
+                              [], Queue(), Queue(), lambda *_: None, logging.CRITICAL, None)
     assert control.get_nowait() == {"type": "free_process", "gameId": "offline"}
     assert wire.lines == []
     api.get_ongoing_games.assert_not_called()
@@ -236,5 +236,5 @@ def test_repeated_game_start_does_not_launch_second_engine(config, monkeypatch):
     pool.__exit__ = Mock(return_value=False)
     monkeypatch.setattr(bot.multiprocessing.pool, "Pool", lambda _: pool)
     monkeypatch.setattr(bot, "terminated", False)
-    bot.start(Mock(), {"username": "bot"}, config, logging.CRITICAL, None)
+    bot.start(Mock(), {"username": "bot"}, config, logging.CRITICAL, None, None)
     assert pool.apply_async.call_count == 1

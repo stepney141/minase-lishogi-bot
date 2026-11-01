@@ -13,7 +13,7 @@ nhamil版は[TheYoBots/Lishogi-Bot](https://github.com/TheYoBots/Lishogi-Bot)の
 | ファイル | 役割 |
 |---|---|
 | `Dockerfile` | 2段階ビルド。第1段階はrust:1.98でcrates.ioから版を固定した`minase`をビルドし、第2段階はpython:3.11-slimへLishogi-Botのソースと依存パッケージ、minaseのバイナリ、起動ラッパーを置く。コンテナは非rootユーザーで動き、そのuidとgidはビルド時に`.env`から受け取る。 |
-| `compose.yml` | ビルドと起動の定義。`additional_contexts`でローカルの`../lishogi-bot`を渡し、Lishogi-Botは未コミットの変更も含めて取り込む。ログは`logs/lishogi-bot.log`に出る。 |
+| `compose.yml` | ビルドと起動の定義。`additional_contexts`でローカルの`../lishogi-bot`を渡し、Lishogi-Botは未コミットの変更も含めて取り込む。ログは`logs/lishogi-bot.log`と`logs/games/`に出る。 |
 | `.env.example` | `.env`の雛形。認証トークン、コンテナの資源上限、およびコンテナのユーザーのuidとgidを置く。 |
 | `minase-lishogi` | `--protocol usi --rules lishogi`を固定してminaseを起動するシェルスクリプト。 |
 | `config.yml` | Lishogi-Botの設定。コンテナへ読み取り専用でマウントする。 |
@@ -35,7 +35,7 @@ nhamil版のコミットe0a3169は、`speed`が無いときに削られる前の
 nhamil版は17c16bcに対してこのほか、秒読みが0でないときの下限`min_nonzero_byoyomi`、挑戦者の許可リストと拒否リスト（`allow_list`、`block_list`、`bot_allow_list`、`bot_block_list`）、および京都将棋の指し手をリストで受ける修正を加えている。
 いずれも設定を省略すれば無効であり、`config.yml`では使っていない。
 
-stepney141版は、ponderの2つの修正（コミット1cbfcb9と201af8a）、後述する通信対局への対応、投了の対応（コミット7568380）、および初期局面の手番の修正（コミット366e9cb）を加えている。
+stepney141版は、ponderの2つの修正（コミット1cbfcb9と201af8a）、後述する通信対局への対応、投了の対応（コミット7568380）、初期局面の手番の修正（コミット366e9cb）、および対局ごとのログファイル（コミット748612c）を加えている。
 nhamil版はStandard以外の変則で、先読みの`go ponder`に自分の着手と予想手を含まない局面を渡す。
 StandardとCheckshogi以外では予想手との照合もnull手との比較になり、`ponderhit`が成立しない。
 修正後は、自分の着手と予想手を加えた手順を渡し、エンジンへ送る記法の最終手と予想手を照合する。
@@ -51,6 +51,8 @@ lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を
 2026年10月3日の対局`yCbfKMbm`では、挑戦者が後手番から始まる中将棋の局面を指定し、後手のminaseは自分の手番に探索を始めず、対局は着手のないまま中止された。
 修正後は初期SFENの手番が`w`なら後手番から数えるので、後手から始まる局面でもminaseが初手を指す（`test_setup_board.py`）。
 駒の配置を変えた局面は、修正前から初期SFENのままエンジンへ渡している。
+コミット748612cは、各対局のログを`--game-log-dir`が指すディレクトリの`<対局ID>.log`へ書き、`--logfile`のファイルにはBot全体の行だけを残す（`test_game_log.py`）。
+上流はすべての対局の行を`--logfile`の1つのファイルへ書く。ログの配置と分ける理由は手順1に記す。
 
 ## 前提
 
@@ -64,6 +66,10 @@ lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を
 1. `.env.example`を`.env`へ複製し、トークンを`LISHOGI_BOT_TOKEN`に書く。`.env`はGit管理の対象外である。
    `MINASE_LISHOGI_BOT_UID`と`MINASE_LISHOGI_BOT_GID`には運用するユーザーの`id -u`と`id -g`の値を書き、`mkdir logs`でログの置き場を作る。
    コンテナはこのuidとgidでログを書くので、ログはホストのユーザーの所有になる。
+   Bot全体のログは`logs/lishogi-bot.log`に、各対局のログは`logs/games/<対局ID>.log`に出る。
+   前者にはイベントストリームの受信、挑戦の受諾と拒否、処理枠の割当てと解放、および対局処理の異常終了が入り、後者にはその対局の局面の更新、エンジンとの送受信、および着手の送信が入る。
+   対局ごとに分けるのは、エンジンとの送受信の行が対局IDを持たないためである。1つのファイルに同時に進む2局の行が混ざると、`go`の引数や探索の出力がどちらの対局のものかを確かめられない。
+   通信対局は再接続のたびに同じファイルへ追記する。`logs/games/`はBotが作る。
    `logs/`が無いと起動は失敗する。Dockerに作らせるとroot所有になり、コンテナから書けないためである。`logs/`はGit管理の対象外である。
 
 2. 初回だけ、Botを起動せずにアカウントを昇格する。Lishogi-Botの`-u`は昇格後にそのまま挑戦の待受へ進むので使わず、同じAPIを直接呼ぶ。応答が`{"ok":true}`であることを確かめる。
@@ -159,7 +165,7 @@ docker run --rm --network none \
   -v ./test_correspondence.py:/opt/lishogi-bot/test_correspondence.py:ro \
   -v ./test_streams.py:/opt/lishogi-bot/test_streams.py:ro \
   --entrypoint python3 minase-lishogi-bot-bot \
-  -m pytest -q -W error -p no:cacheprovider test_streams.py test_correspondence.py test_ponder.py test_resign.py test_setup_board.py
+  -m pytest -q -W error -p no:cacheprovider test_streams.py test_correspondence.py test_ponder.py test_resign.py test_setup_board.py test_game_log.py
 ```
 
 ## 通常対局の時計の換算と注意
@@ -175,7 +181,7 @@ minase 2.2.0以降は秒読みから`ByoyomiMargin`を引いた時刻まで探�
 当初の600ミリ秒は、Bot側の処理時間の最大12ミリ秒にlishogiまでの通信の見込み500ミリ秒を加えた推定値だった（minaseの`docs/plans/archived/byoyomi-time-usage.md`）。
 2026年10月8日から10日までに秒読み60秒の上限まで考えた213手のうち10手が時間切れになったため、2026年10月10日に値を改めた。
 ログ全体の25,799手で`bestmove`から着手の`POST`の応答までの時間を測ると、0.6秒超が796手、2秒超が57手、3秒超が10手だった。
-公開運用ではLishogi-Botのログから`go`の引数、`bestmove`の時刻、および着手送信の時刻を取り出し、lishogi側の時計と突き合わせて端到端の最小の余裕を記録する。
+公開運用では各対局のログから`go`の引数、`bestmove`の時刻、および着手送信の時刻を取り出し、lishogi側の時計と突き合わせて端到端の最小の余裕を記録する。
 余裕が不足する場合は`move_overhead`を増やして対処せず、`ByoyomiMargin`を上げる。
 
 ## 先読みの通信の確認

@@ -120,7 +120,7 @@ def play(config, session, full, updates=(), username="bot"):
     control, correspondence = Queue(), Queue()
     # Retry delays are irrelevant with a deterministic stream; propagate failures directly.
     bot.play_game.__wrapped__(api, "offline", control, {"username": username}, config,
-                              [], correspondence, Queue(), lambda *_: None, logging.CRITICAL)
+                              [], correspondence, Queue(), lambda *_: None, logging.CRITICAL, None)
     assert control.get_nowait() == {"type": "free_process", "gameId": "offline"}
     assert wire.lines[-2:] == ["stop", "quit"]
     assert wire.killed
@@ -215,7 +215,7 @@ def test_startup_resumes_chushogi_on_opponents_turn(config, monkeypatch, game_co
     api.get_ongoing_games.return_value = [
         {"gameId": game_id, "perf": "chushogi", "isMyTurn": False} for game_id in game_ids
     ]
-    bot.start(api, {"username": "bot"}, config, logging.CRITICAL, None)
+    bot.start(api, {"username": "bot"}, config, logging.CRITICAL, None, None)
     assert [call.args[1][1] for call in pool.apply_async.call_args_list] == game_ids
     pingers = [call for call in processes.call_args_list if call.kwargs["target"] is bot.do_correspondence_ping]
     assert pingers[0].kwargs["args"][1] == 600

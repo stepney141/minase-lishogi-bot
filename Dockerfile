@@ -28,4 +28,4 @@ WORKDIR /opt/lishogi-bot
 USER app
 # 認証トークンは実行時に環境変数 LISHOGI_BOT_TOKEN で渡す。
 ENTRYPOINT ["python3", "lishogi-bot.py"]
-CMD ["-v", "--logfile", "/var/log/lishogi-bot/lishogi-bot.log"]
+CMD ["-v", "--logfile", "/var/log/lishogi-bot/lishogi-bot.log", "--game-log-dir", "/var/log/lishogi-bot/games"]

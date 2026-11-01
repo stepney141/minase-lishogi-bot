@@ -47,7 +47,7 @@ api.get_ongoing_games.return_value = []
 control, pending = Queue(), Queue()
 started = time.monotonic()
 bot.play_game.__wrapped__(api, "offline", control, {"username": "bot"}, config,
-                          [], pending, Queue(), lambda *_: None, logging.DEBUG)
+                          [], pending, Queue(), lambda *_: None, logging.DEBUG, None)
 elapsed = time.monotonic() - started
 assert [line for line in commands if line.startswith("go ")] == ["go movetime 300000"]
 api.make_move.assert_called_once()
