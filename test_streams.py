@@ -88,7 +88,6 @@ def test_reconnect_uses_latest_position_and_releases_engine(config, session, fai
     second = response_with(resumed, finished)
     api = Mock(baseUrl="https://lishogi.invalid/")
     api.get_game_stream.side_effect = [first, second]
-    api.get_ongoing_games.return_value = [{"gameId": "offline"}]
     control = Queue()
     bot.play_game.__wrapped__(api, "offline", control, {"username": "bot"}, config,
                               [], Queue(), Queue(), lambda *_: None, logging.CRITICAL, None)
@@ -127,9 +126,11 @@ def test_disconnect_after_game_ended_stops_ponder(config, session, monkeypatch):
         raise requests.exceptions.ConnectionError("read timed out")
 
     response.iter_lines.side_effect = lines
+    # The game ended while the stream was down, so the reconnected stream starts with the finished state.
+    finished = game_full("7h7g", realtime=True)
+    finished["state"].update(status="outoftime", winner="gote")
     api = Mock(baseUrl="https://lishogi.invalid/")
-    api.get_game_stream.return_value = response
-    api.get_ongoing_games.return_value = []
+    api.get_game_stream.side_effect = [response, response_with(finished)]
     control = Queue()
     bot.play_game.__wrapped__(api, "offline", control, {"username": "bot"}, config,
                               [], Queue(), Queue(), lambda *_: None, logging.CRITICAL, None)
@@ -137,23 +138,23 @@ def test_disconnect_after_game_ended_stops_ponder(config, session, monkeypatch):
     assert released.is_set()
     assert wire.killed
     assert control.qsize() == 1
-    assert api.get_game_stream.call_count == 1
+    assert api.get_game_stream.call_count == 2
 
 
 def test_failed_recovery_still_releases_engine(config, session):
     wire, _ = session
     response = response_with(game_full("7i7h", realtime=True),
                              error=requests.exceptions.ConnectionError("read timed out"))
-    api = Mock(baseUrl="https://lishogi.invalid/")
-    api.get_game_stream.return_value = response
     denied = requests.Response()
     denied.status_code = 403
-    api.get_ongoing_games.side_effect = requests.exceptions.HTTPError(response=denied)
-    with pytest.raises(requests.exceptions.HTTPError):
-        bot.play_game.__wrapped__(api, "offline", Queue(), {"username": "bot"}, config,
-                                  [], Queue(), Queue(), lambda *_: None, logging.CRITICAL, None)
+    api = Mock(baseUrl="https://lishogi.invalid/")
+    api.get_game_stream.side_effect = [response, requests.exceptions.HTTPError(response=denied)]
+    control = Queue()
+    bot.play_game.__wrapped__(api, "offline", control, {"username": "bot"}, config,
+                              [], Queue(), Queue(), lambda *_: None, logging.CRITICAL, None)
     assert wire.killed
     assert wire.lines[-2:] == ["stop", "quit"]
+    assert control.get_nowait() == {"type": "free_process", "gameId": "offline"}
     response.close.assert_called_once()
 
 
@@ -209,7 +210,6 @@ def test_expired_game_releases_slot_without_starting_engine(config, session):
                               [], Queue(), Queue(), lambda *_: None, logging.CRITICAL, None)
     assert control.get_nowait() == {"type": "free_process", "gameId": "offline"}
     assert wire.lines == []
-    api.get_ongoing_games.assert_not_called()
 
 
 def test_failed_worker_releases_its_slot():

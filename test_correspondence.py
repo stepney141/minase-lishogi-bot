@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+import requests
 import yaml
 
 import engine_wrapper
@@ -108,7 +109,6 @@ def session(monkeypatch):
 def play(config, session, full, updates=(), username="bot"):
     wire, now = session
     api = Mock(baseUrl="https://lishogi.invalid/")
-    api.get_ongoing_games.return_value = []
 
     def lines():
         yield json.dumps(full).encode()
@@ -116,7 +116,12 @@ def play(config, session, full, updates=(), username="bot"):
             now.value += elapsed
             yield json.dumps(update).encode() if update else b""
 
-    api.get_game_stream.return_value.iter_lines.side_effect = lines
+    stream = api.get_game_stream.return_value
+    stream.iter_lines.side_effect = lines
+    # After the scripted stream ends, the reconnection finds no game, which ends the worker.
+    missing = requests.Response()
+    missing.status_code = 404
+    api.get_game_stream.side_effect = [stream, requests.exceptions.HTTPError(response=missing)]
     control, correspondence = Queue(), Queue()
     # Retry delays are irrelevant with a deterministic stream; propagate failures directly.
     bot.play_game.__wrapped__(api, "offline", control, {"username": username}, config,
@@ -212,9 +217,6 @@ def test_startup_resumes_chushogi_on_opponents_turn(config, monkeypatch, game_co
     monkeypatch.setattr(bot.multiprocessing.pool, "Pool", lambda _: pool)
     monkeypatch.setattr(bot, "terminated", False)
     api = Mock()
-    api.get_ongoing_games.return_value = [
-        {"gameId": game_id, "perf": "chushogi", "isMyTurn": False} for game_id in game_ids
-    ]
     bot.start(api, {"username": "bot"}, config, logging.CRITICAL, None, None)
     assert [call.args[1][1] for call in pool.apply_async.call_args_list] == game_ids
     pingers = [call for call in processes.call_args_list if call.kwargs["target"] is bot.do_correspondence_ping]
