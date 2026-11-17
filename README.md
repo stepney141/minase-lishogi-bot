@@ -150,8 +150,12 @@ docker run --rm --network none --cpus 4 \
 
 イベントと対局のストリームには、接続に10秒、無受信に30秒のタイムアウトを設定する。
 受信が途絶えた場合は警告を記録し、イベントストリームへ再接続する。
-対局ストリームは進行中の対局一覧と照合し、対局が続いていれば再接続して最新局面から処理を再開する。
-対局が終了していればエンジンを停止し、処理枠を解放する。
+対局ストリームは切断のたびに再接続し、最新局面から処理を再開する。
+lishogiは対局ストリームの接続ごとに、局面と対局の状態を含む`gameFull`を最初に送り、対局が終了していればその直後にストリームを閉じる（[GameStateStream.scala](https://github.com/WandererXII/lishogi/blob/master/modules/bot/src/main/GameStateStream.scala)）。
+そのため、切断中に終局した対局では、再接続で受け取った状態から終局を検知し、エンジンを停止して処理枠を解放する。
+存在しない対局には404が返るので、再接続をやめて処理枠を解放する。
+lishogiはイベントストリームの接続時に、進行中の対局を最大100局まで`gameStart`として送り直す（[GameRepo.scala](https://github.com/WandererXII/lishogi/blob/master/modules/game/src/main/GameRepo.scala)の`urgentPovsUnsorted`）。
+そのため、Botを再起動すると進行中の対局を再開できる。
 再接続時に同じ対局の開始通知を受けても、処理中の対局は重複起動しない。
 
 2026年9月22日の障害では、サーバーからの受信が日本時間15:42ごろに途絶え、対局`1z3YZqtK`が時間切れで終了した後も先読みが残っていた。
@@ -167,6 +171,13 @@ docker run --rm --network none \
   --entrypoint python3 minase-lishogi-bot-bot \
   -m pytest -q -W error -p no:cacheprovider test_streams.py test_correspondence.py test_ponder.py test_resign.py test_setup_board.py test_game_log.py
 ```
+
+2026年11月には、通信対局`Y1Eow088`、`wp2qKEQE`、`eNlu7Se0`、`qYPUhfAr`の4局が、Botが指さないまま時間切れで負けた。
+当時の版（コミットfd77b01）は、切断後に対局が続いているかを、進行中の対局一覧`/api/account/playing`に載っているかで判断していた。
+この一覧は優先度順に並べた先頭だけを返し、件数は既定で9件、指定しても最大50件である（[Account.scala](https://github.com/WandererXII/lishogi/blob/master/app/controllers/Account.scala)の`doNowPlaying`）。
+通信対局が10局以上ある状態で回線が一時的に切れると、一覧から漏れた対局を終了したものとみなして処理対象から外し、それ以降は再接続しなかった。
+後の3局を外した11月13日の照合では、一覧がちょうど9件を返し、3局はどれもその中に無かった。
+コミット9657330で一覧との照合をやめ、対局が終わったかどうかを対局ストリームが返す状態だけで判断するようにした。
 
 ## 通常対局の時計の換算と注意
 
