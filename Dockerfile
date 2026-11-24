@@ -6,7 +6,11 @@
 FROM rust:1.98-bookworm AS minase-build
 # target-cpu=native はビルド機の CPU に特化するので、運用機でビルドする。
 # LTO と codegen-units=1 は 2.0.1 以降の crate 自身の release プロファイルが与える。
-ENV RUSTFLAGS="-C target-cpu=native"
+# RUSTFLAGS は minase リポジトリの .cargo/config.toml の rustflags を置き換え、cargo install は
+# crates.io のパッケージに含まれないその設定を読まないので、LLVM のインライン閾値もここで指定する
+# (minase の docs/adr/raise-the-llvm-inline-threshold-to-1000.md)。
+# 閾値を付けた版は、付けない版より minase の bench 深さ16の毎秒ノード数が約5%高く、探索結果は同じだった。
+ENV RUSTFLAGS="-C target-cpu=native -C llvm-args=-inline-threshold=1000"
 # minase の版はこの --version の1か所で指定する。
 RUN cargo install minase --version =3.0.0 --locked --bin minase --root /build
 
