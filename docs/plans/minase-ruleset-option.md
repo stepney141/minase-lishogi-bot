@@ -4,7 +4,9 @@
 
 2026年11月12日に、中将棋エンジンminaseの側の仕様変更へ、本リポジトリの配備一式（minaseをlishogiのBotとして動かすDockerイメージ、設定、および起動用のスクリプト）を追従させる計画として起案した。
 対象の変更は、minaseの計画「起動引数と診断ツールをUSIへ移す」（minaseのリポジトリの`docs/plans/archived/cli-to-usi.md`）である。
-着手は、この変更を含む版のminaseがcrates.ioで公開された後、利用者の指示を待って行う。
+着手は、この変更を含む版のminaseがcrates.ioで公開された後、利用者の指示を待って行うとしていた。
+2026年11月24日にminase 3.0.0がcrates.ioで公開され、同じ日に利用者の指示で、本書の3つの切り替えを1つのコミットで行ってBotを起動し直した。
+minase 3.0.0は評価ネットも実行ファイルに埋め込まないので、本書の3つに加えて、Dockerfileがネットを取得してイメージに置き、`config.yml`の`usi_options`に`EvalFile`を加えた（構成は`README.md`にある）。
 
 ## 目的
 

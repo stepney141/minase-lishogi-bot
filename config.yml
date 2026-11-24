@@ -6,21 +6,25 @@ url: "https://lishogi.org/"
 
 engine:
   dir: "/opt/minase"
-  # 引数なしで --protocol usi --rules lishogi を付けて起動するラッパー。
+  # 引数なしで --protocol usi を付けて起動するラッパー。
   # engine_options は Lishogi-Bot が引数を捨てるため使わない。
   name: "minase-lishogi"
   protocol: "usi"
   ponder: true
   usi_options:
+    # minase 3 は規則セットと評価ネットの既定値を持たず、どちらかが未設定のまま isready を受けると終了する。
+    # Lishogi-Bot は usi_options を isready より前に setoption で送る。
+    RuleSet: lishogi
+    # Dockerfile が Hugging Face Hub から取得して SHA-256 を照合したネット。
+    EvalFile: /opt/minase/eval.nnue
     Threads: 4
     USI_Hash: 2048
     # 秒読み期の締切に残す余裕(ms)。600 ms では秒読みを上限まで使った手の 4.7% (213 手中 10 手)が
     # 時間切れになったので、着手の POST の往復時間の実測(3 秒超は 25,799 手中 10 手)から 3000 ms にした。
-    # このオプションを持たない版の minase は、USI の慣例どおり無視する。
+    # 値の経緯は README.md の「通常対局の時計の換算と注意」にある。
     ByoyomiMargin: 3000
     # 千日手（R1）の引き分けに返す評価値(cp)。-1 にすると、評価値がちょうど同じ手の間でだけ
     # 千日手を避ける。値の理由は minase の docs/adr/set-the-draw-value-by-usi-option-signed-from-the-root-side.md にある。
-    # このオプションを持たない版の minase は、USI の慣例どおり無視する。
     DrawValueBlack: -1
     DrawValueWhite: -1
   silence_stderr: false

@@ -8,14 +8,15 @@ nhamil版は[TheYoBots/Lishogi-Bot](https://github.com/TheYoBots/Lishogi-Bot)の
 
 ## 構成
 
-ローカルのLishogi-Botとcrates.ioで公開されたminaseを1つのDockerイメージにまとめ、運用機ではそのイメージを認証トークンと資源上限を与えて起動する。
+ローカルのLishogi-Bot、crates.ioで公開されたminase、およびminaseの評価ネットを1つのDockerイメージにまとめ、運用機ではそのイメージを認証トークンと資源上限を与えて起動する。
+minaseは3.0.0から評価ネットを実行ファイルに埋め込まず、外部のファイルから読むので、イメージにはネットのファイルも置く。
 
 | ファイル | 役割 |
 |---|---|
-| `Dockerfile` | 2段階ビルド。第1段階はrust:1.98でcrates.ioから版を固定した`minase`をビルドし、第2段階はpython:3.11-slimへLishogi-Botのソースと依存パッケージ、minaseのバイナリ、起動ラッパーを置く。コンテナは非rootユーザーで動き、そのuidとgidはビルド時に`.env`から受け取る。 |
+| `Dockerfile` | 2段階ビルド。第1段階はrust:1.98でcrates.ioから版を固定した`minase`をビルドする。第2段階はpython:3.11-slimへLishogi-Botのソースと依存パッケージ、minaseのバイナリ、起動ラッパー、およびHugging Face Hubから取得した評価ネットを置く。コンテナは非rootユーザーで動き、そのuidとgidはビルド時に`.env`から受け取る。 |
 | `compose.yml` | ビルドと起動の定義。`additional_contexts`でローカルの`../lishogi-bot`を渡し、Lishogi-Botは未コミットの変更も含めて取り込む。ログは`logs/lishogi-bot.log`と`logs/games/`に出る。 |
 | `.env.example` | `.env`の雛形。認証トークン、コンテナの資源上限、およびコンテナのユーザーのuidとgidを置く。 |
-| `minase-lishogi` | `--protocol usi --rules lishogi`を固定してminaseを起動するシェルスクリプト。 |
+| `minase-lishogi` | `--protocol usi`を固定してminaseを起動するシェルスクリプト。 |
 | `config.yml` | Lishogi-Botの設定。コンテナへ読み取り専用でマウントする。 |
 | `ponder_check.py` | lishogiへ接続せずに、イメージの中でLishogi-Botの関数を呼んで先読み（ponder）の通信を確かめるスクリプト（後述）。 |
 | `test_correspondence.py` | 挑戦の受諾、通信対局の時間管理、切断と再接続を、APIとエンジンの入出力を模擬して検証する。 |
@@ -56,7 +57,7 @@ lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を
 
 ## 前提
 
-- Docker（Compose v2を含む）が必要である。ビルド時にcrates.ioからminaseを取得するので、ビルド機はネットワークに出られる必要がある。
+- Docker（Compose v2を含む）が必要である。ビルド時にcrates.ioからminaseを、Hugging Face Hubから評価ネットを取得するので、ビルド機はネットワークに出られる必要がある。
 - イメージは運用機でビルドする。minaseは`-C target-cpu=native`でビルドするため、生成されたバイナリはビルド機のCPUが持つ命令拡張を使い、それを持たないCPUでは不正命令で停止しうる。別の機械でビルドしたイメージを運用機へ持ち込まない。
 - 通信対局の修正を含むLishogi-Botのソースを`../lishogi-bot`に置く。DockerfileはPythonのソースと`engine_ctrl`、依存パッケージの一覧だけを取り込み、そのリポジトリの設定ファイルは取り込まない。
 - `bot:play`スコープの認証トークン。対局履歴のない新規アカウントで発行する。昇格は取り消せず、一度でも対局したアカウントは昇格できない。
@@ -88,8 +89,13 @@ lishogiの時計は、持ち時間が尽きた後は1手ごとに残り時間を
 4. 運用の開始と終了、minaseの版とLishogi-Botのコミット、および受け付けた対局条件を記録する。Lishogi-Botは`git -C ../lishogi-bot rev-parse HEAD`と`git -C ../lishogi-bot diff`でビルドしたソースを記録する。Botのプロフィールにはエンジン名、リポジトリの所在、および運用中の版を記す。
 
 minaseの版は`Dockerfile`の`cargo install minase --version`の1か所だけで指定する。
-エンジンを更新するときは、crates.ioに公開された新しい版をこの指定に書き、`docker compose up --build -d`を再実行する。
-指定を変えなければ、再ビルドしてもDockerのキャッシュにある同じバイナリが使われる。取得またはビルドに失敗した場合は更新を失敗として扱う。
+2026年11月24日に、2.6.0から3.0.0へ上げた。
+評価ネットは`Dockerfile`の`ADD`の1か所だけで指定する。
+`ADD`は、Hugging Face Hubのモデルリポジトリ[stepney141/minase-nets](https://huggingface.co/stepney141/minase-nets)の固定したリビジョンからファイルを取得し、ファイル全体のSHA-256が指定と一致しなければビルドを失敗させて、イメージの`/opt/minase/eval.nnue`に置く。
+いまのネットは、minaseの世代反復の第3世代のP型のネット（`nnue/p/minase-nnue-p-lishogi-20261124-cbbccf6f.nnue`）であり、lishogiの規則セットで学習したものである（minaseの`docs/training/nnue-generation-iteration/README.md`）。
+エンジンを更新するときはcrates.ioに公開された新しい版を`--version`に、ネットを更新するときは新しいリビジョン、パス、およびSHA-256を`ADD`に書き、`docker compose up --build -d`を再実行する。
+minaseは読み込んだネットのSHA-256を`isready`の応答の前に`info string network_sha256 <SHA-256>`として出すので、各対局のログでネットを確かめられる。
+指定を変えなければ、再ビルドしてもDockerのキャッシュにある同じバイナリとネットが使われる。取得またはビルドに失敗した場合は更新を失敗として扱う。
 運用機のCPUを替えたときは、`target-cpu=native`の結果を作り直すため、`docker compose build --no-cache`で再ビルドする。
 Lishogi-Botのコードを変更した場合も再ビルドする。
 設定ファイルだけの変更は、イメージの再ビルドを要せず、`docker compose up -d --no-build --force-recreate`で反映する。
@@ -102,6 +108,7 @@ Lishogi-Botは`token`の項目自体を必須とするので、設定ファイ�
 `Threads`、`USI_Hash`、受け付ける時間制御の範囲は運用パラメータであり、運用機に合わせて変える。
 
 - `engine.name`はラッパー`minase-lishogi`を指す。`engine_options`は使わない。
+- 規則セットと評価ネットは、`usi_options`の`RuleSet`と`EvalFile`で渡す。minase 3.0.0以降は起動引数`--rules`を持たず、どちらにも既定値がないので、片方でも未設定のまま`isready`を受けるとエラーを出して終了する。Lishogi-Botは`usi_options`の各項目を`isready`より前に`setoption`で送る。
 - minaseは詰まされる読みが出た局面で`bestmove resign`を返す（USIオプション`ResignValue`、既定20000、minaseの`docs/plans/usi-resignation.md`）。`config.yml`では値を上書きせず既定値のまま使う。
 - 通常対局では`engine.ponder`を有効にし、通信対局では`correspondence.ponder`を無効にする。minaseは`bestmove`に予想手を付け、`go ponder`と`ponderhit`に対応する（minaseの`docs/plans/ponder.md`）。先読みの間も`Threads`の数だけCPUを使うので、コンテナのCPU数は「`Threads`×同時対局数」を下回らないようにする。
 - `go_commands`は与えない。深さやノード数の上書きは時間管理を無効にする。
@@ -212,7 +219,7 @@ docker run --rm --cpus 8 \
 
 ## 事後照合
 
-受諾した全対局を母数として、完走した対局をlishogi APIから取得し、minaseの`--rules lishogi`で再生して各手の受理と終局裁定の一致を確かめる。
+受諾した全対局を母数として、完走した対局をlishogi APIから取得し、minaseの規則セット`lishogi`で再生して各手の受理と終局裁定の一致を確かめる。
 取得は`/api/games/user/<Bot名>?perfType=chushogi&moves=true`で行う。
 Lishogi-Botのログからは、`position`の拒否、`bestmove`の欠落、エンジンプロセスの異常終了と残存、および時間切れ負けの件数を数え、いずれも0件であることを要する。
 完走しなかった対局は、無活動による中断、相手の切断、Lishogi-Botの通信例外、および対局ストリームの終了に理由を分け、minase側に起因するものが0件であることを確かめる。

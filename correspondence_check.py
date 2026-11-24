@@ -41,8 +41,30 @@ full = {
     "perf": {"name": "Chu shogi"}, "clock": None, "initialSfen": "startpos",
     "sente": {"name": "bot"}, "gote": {"name": "opponent"}, "state": state,
 }
+
+
 api = Mock(baseUrl="https://lishogi.invalid/")
-api.get_game_stream.return_value.iter_lines.return_value = iter([json.dumps(full).encode()])
+
+
+def stream_lines():
+    """対局ストリームを模擬する。lishogiと同じく、着手を反映したgameStateと、1秒おきの空行を送る。
+
+    Lishogi-Botは対局ストリームが閉じると再接続を繰り返し、着手後の待機（disconnect_time）は
+    相手の手番のgameStateを受け取ってから数える。gameFullだけを返して閉じるストリームでは、
+    対局ループが終わらない。
+    """
+    yield json.dumps(full).encode()
+    reported = False
+    while True:
+        time.sleep(1)
+        if not reported and api.make_move.called:
+            reported = True
+            yield json.dumps({**state, "moves": api.make_move.call_args.args[1]}).encode()
+        else:
+            yield b""
+
+
+api.get_game_stream.return_value.iter_lines.return_value = stream_lines()
 api.get_ongoing_games.return_value = []
 control, pending = Queue(), Queue()
 started = time.monotonic()
