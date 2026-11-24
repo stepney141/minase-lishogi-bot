@@ -12,7 +12,7 @@ FROM rust:1.98-bookworm AS minase-build
 # 閾値を付けた版は、付けない版より minase の bench 深さ16の毎秒ノード数が約5%高く、探索結果は同じだった。
 ENV RUSTFLAGS="-C target-cpu=native -C llvm-args=-inline-threshold=1000"
 # minase の版はこの --version の1か所で指定する。
-RUN cargo install minase --version =3.0.0 --locked --bin minase --root /build
+RUN cargo install minase --version =3.0.1 --locked --bin minase --root /build
 
 FROM python:3.11-slim-bookworm AS runtime
 # ログはホストの logs/ へ書くので、compose.yml がホストのユーザーの uid と gid を渡す。
@@ -28,10 +28,10 @@ COPY --from=lishogi-bot-source /engine_ctrl /opt/lishogi-bot/engine_ctrl
 COPY --from=minase-build /build/bin/minase /opt/minase/minase
 COPY minase-lishogi /opt/minase/minase-lishogi
 # minase は評価ネットを実行ファイルに埋め込まず、USI のオプション EvalFile で指定したファイルから読む。
-# ネットはこの ADD の1か所で指定する(minase の世代反復の第3世代、P 型、規則セット lishogi で学習)。
+# ネットはこの ADD の1か所で指定する(minase の世代反復の第3世代、A 型、規則セット lishogi で学習)。
 # 取得したファイルの SHA-256 が一致しなければビルドは失敗する。config.yml の EvalFile は /opt/minase/eval.nnue を指す。
-ADD --checksum=sha256:cbbccf6f5ee7097fd890086d2cf4bca72ed969da28353cb0c4a2f4d781acc244 --chmod=644 \
-    https://huggingface.co/stepney141/minase-nets/resolve/01ccc6f471e9696a37acfb3a2ac753c0add15a39/nnue/p/minase-nnue-sfnn_p_256x16x32_psqt-lishogi-20261124-cbbccf6f.nnue \
+ADD --checksum=sha256:415020879b9086772acb168397dfa406a1432350c151f87b635b3f271153d1a9 --chmod=644 \
+    https://huggingface.co/stepney141/minase-nets/resolve/31694812f777ed24fa04410f7bf40211463508a3/nnue/a/minase-nnue-sfnn_a_256x16x32_psqt-lishogi-20261124-41502087.nnue \
     /opt/minase/eval.nnue
 # 設定ファイルはイメージへ入れず、compose.yml が config.yml を
 # /opt/lishogi-bot/config.yml へ読み取り専用でマウントする。
