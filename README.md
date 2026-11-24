@@ -92,7 +92,7 @@ minaseの版は`Dockerfile`の`cargo install minase --version`の1か所だけ�
 2026年11月24日に、2.6.0から3.0.0へ上げた。
 評価ネットは`Dockerfile`の`ADD`の1か所だけで指定する。
 `ADD`は、Hugging Face Hubのモデルリポジトリ[stepney141/minase-nets](https://huggingface.co/stepney141/minase-nets)の固定したリビジョンからファイルを取得し、ファイル全体のSHA-256が指定と一致しなければビルドを失敗させて、イメージの`/opt/minase/eval.nnue`に置く。
-いまのネットは、minaseの世代反復の第3世代のP型のネット（`nnue/p/minase-nnue-p-lishogi-20261124-cbbccf6f.nnue`）であり、lishogiの規則セットで学習したものである（minaseの`docs/training/nnue-generation-iteration/README.md`）。
+いまのネットは、minaseの世代反復の第3世代のP型のネット（`nnue/p/minase-nnue-sfnn_p_256x16x32_psqt-lishogi-20261124-cbbccf6f.nnue`）であり、lishogiの規則セットで学習したものである（minaseの`docs/training/nnue-generation-iteration/README.md`）。
 エンジンを更新するときはcrates.ioに公開された新しい版を`--version`に、ネットを更新するときは新しいリビジョン、パス、およびSHA-256を`ADD`に書き、`docker compose up --build -d`を再実行する。
 minaseは読み込んだネットのSHA-256を`isready`の応答の前に`info string network_sha256 <SHA-256>`として出すので、各対局のログでネットを確かめられる。
 指定を変えなければ、再ビルドしてもDockerのキャッシュにある同じバイナリとネットが使われる。取得またはビルドに失敗した場合は更新を失敗として扱う。

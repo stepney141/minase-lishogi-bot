@@ -31,7 +31,7 @@ COPY minase-lishogi /opt/minase/minase-lishogi
 # ネットはこの ADD の1か所で指定する(minase の世代反復の第3世代、P 型、規則セット lishogi で学習)。
 # 取得したファイルの SHA-256 が一致しなければビルドは失敗する。config.yml の EvalFile は /opt/minase/eval.nnue を指す。
 ADD --checksum=sha256:cbbccf6f5ee7097fd890086d2cf4bca72ed969da28353cb0c4a2f4d781acc244 --chmod=644 \
-    https://huggingface.co/stepney141/minase-nets/resolve/0a2a688f1ce8cd1dac11ae10cd181e3569410811/nnue/p/minase-nnue-p-lishogi-20261124-cbbccf6f.nnue \
+    https://huggingface.co/stepney141/minase-nets/resolve/01ccc6f471e9696a37acfb3a2ac753c0add15a39/nnue/p/minase-nnue-sfnn_p_256x16x32_psqt-lishogi-20261124-cbbccf6f.nnue \
     /opt/minase/eval.nnue
 # 設定ファイルはイメージへ入れず、compose.yml が config.yml を
 # /opt/lishogi-bot/config.yml へ読み取り専用でマウントする。
