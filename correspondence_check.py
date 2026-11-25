@@ -18,6 +18,9 @@ assert config["correspondence"]["move_time"] == 600
 assert config["correspondence"]["ponder"] is False
 
 commands = []
+# goの送信からbestmoveの受信までを探索時間とし、着手後の応手待ちを含む対局ループ全体の時間と分けて出す。
+go_sent_at = []
+bestmove_received_at = []
 
 
 class Capture(logging.Handler):
@@ -25,8 +28,11 @@ class Capture(logging.Handler):
         message = record.getMessage()
         if message.startswith("<< "):
             commands.append(message[3:])
+            if message.startswith("<< go "):
+                go_sent_at.append(record.created)
             print(message, flush=True)
         elif message.startswith(">> bestmove"):
+            bestmove_received_at.append(record.created)
             print(message, flush=True)
 
 
@@ -94,4 +100,9 @@ try:
 finally:
     helper.quit()
     helper.engine.proccess.wait(10)
-print(f"ALL CHECKS PASSED: legal move {move}, 600 s budget, elapsed {elapsed:.3f} s")
+assert len(go_sent_at) == 1 and len(bestmove_received_at) == 1
+search = bestmove_received_at[0] - go_sent_at[0]
+disconnect_time = config["correspondence"]["disconnect_time"]
+print(f"ALL CHECKS PASSED: legal move {move}, "
+      f"search {search:.3f} s of the 600 s budget (go to bestmove), "
+      f"game loop {elapsed:.3f} s including the {disconnect_time} s wait for a reply after the move")
