@@ -12,7 +12,7 @@ FROM rust:1.98-bookworm AS minase-build
 # 閾値を付けた版は、付けない版より minase の bench 深さ16の毎秒ノード数が約5%高く、探索結果は同じだった。
 ENV RUSTFLAGS="-C target-cpu=native -C llvm-args=-inline-threshold=1000"
 # minase の版はこの --version の1か所で指定する。
-RUN cargo install minase --version =3.1.0 --locked --bin minase --root /build
+RUN cargo install minase --version =3.1.1 --locked --bin minase --root /build
 
 FROM python:3.11-slim-bookworm AS runtime
 # ログはホストの logs/ へ書くので、compose.yml がホストのユーザーの uid と gid を渡す。

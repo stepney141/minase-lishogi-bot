@@ -92,6 +92,7 @@ minaseの版は`Dockerfile`の`cargo install minase --version`の1か所だけ�
 2026年11月24日に、2.6.0から3.0.0へ上げた。
 2026年11月25日に、3.0.1へ上げた。3.0.1は、3.0.0までP型と呼んでいた入力特徴集合をA型と改め、A型の名前のネットだけを読むので、ネットも同じ日に変換したファイルへ替えた。
 同じ日に、3.1.0へ上げた。3.1.0は、探索と時間管理の係数をこのネットに合わせてSPSAで調整し直したものであり、ネットは替えていない。
+2026年11月28日に、3.1.1へ上げた。3.1.1は、固定の仕事量での探索の結果を変えずに探索を速くしたものであり、ネットは替えていない。
 評価ネットは`Dockerfile`の`ADD`の1か所だけで指定する。
 `ADD`は、Hugging Face Hubのモデルリポジトリ[stepney141/minase-nets](https://huggingface.co/stepney141/minase-nets)の固定したリビジョンからファイルを取得し、ファイル全体のSHA-256が指定と一致しなければビルドを失敗させて、イメージの`/opt/minase/eval.nnue`に置く。
 いまのネットは、minaseの世代反復の第3世代のA型のネット（`nnue/a/minase-nnue-sfnn_a_256x16x32_psqt-lishogi-20261124-41502087.nnue`）であり、lishogiの規則セットで学習したものである（minaseの`docs/training/nnue-generation-iteration/README.md`）。
